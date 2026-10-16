@@ -1,0 +1,48 @@
+{
+  "nodes": {
+    "model.demo.orders_day": {
+      "resource_type": "model",
+      "name": "orders_day",
+      "database": "main",
+      "alias": "orders_day",
+      "config": {
+        "schema": "marts",
+        "alias": "orders_day"
+      }
+    },
+    "model.demo.events_raw": {
+      "resource_type": "model",
+      "name": "events_raw",
+      "database": "lakehouse",
+      "alias": "events_raw",
+      "config": {
+        "schema": "schema_a",
+        "alias": "events_raw"
+      }
+    },
+    "test.demo.not_a_model": {
+      "resource_type": "test",
+      "name": "not_a_model",
+      "database": "main",
+      "alias": "not_a_model",
+      "config": {
+        "schema": "marts",
+        "alias": "not_a_model"
+      }
+    }
+  },
+  "sources": {
+    "source.demo.team_marketing.googleads_devices": {
+      "source_name": "team_marketing",
+      "name": "googleads_devices",
+      "database": "main",
+      "schema": "marketing"
+    },
+    "source.demo.raw.clicks": {
+      "source_name": "raw",
+      "name": "clicks",
+      "database": "lakehouse",
+      "schema": "schema_b"
+    }
+  }
+}

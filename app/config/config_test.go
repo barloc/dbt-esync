@@ -210,7 +210,7 @@ default_owner:
   name: analytics
   email: "@analytics"
 manifest:
-  file: testdata/manifest.mini.json
+  file: app/manifest/testdata/manifest.mini.json
   filter_name: starrocks
 parse:
   excluded_catalogs: ["main"]
