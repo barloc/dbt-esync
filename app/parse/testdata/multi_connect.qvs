@@ -1,0 +1,17 @@
+// Synthetic multi-datasource script for unit tests.
+Sub sql_a
+SQL SELECT id FROM marts.billing_day;
+End Sub
+
+Sub sql_b
+SQL SELECT id FROM warehouse_a.events_raw;
+End Sub
+
+LIB CONNECT TO 'vertica';
+Call sql_a;
+
+LIB CONNECT TO 'starrocks';
+Call sql_b;
+
+LIB CONNECT TO 'vertica';
+SQL SELECT * FROM marts.users_dim;

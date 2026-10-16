@@ -1,0 +1,35 @@
+{
+  "projectName": "dbt-esync",
+  "projectOwner": "barloc",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md",
+    "CONTRIBUTORS.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "linkToUsage": true,
+  "contributors": [
+    {
+      "login": "filinspace",
+      "name": "filinspace",
+      "avatar_url": "https://avatars.githubusercontent.com/u/117206354?v=4",
+      "profile": "https://github.com/filinspace",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "ido177",
+      "name": "Kirill Romanikhin",
+      "avatar_url": "https://avatars.githubusercontent.com/u/63454209?v=4",
+      "profile": "https://github.com/ido177",
+      "contributions": [
+        "code"
+      ]
+    }
+  ]
+}

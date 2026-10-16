@@ -1,0 +1,6 @@
+//LIB CONNECT TO 'vertica';
+/* LIB CONNECT TO 'vertica'; */
+SQL SELECT 1 FROM marts.should_skip;
+
+LIB CONNECT TO 'starrocks';
+SQL SELECT id FROM schema_alpha.metrics_day;
