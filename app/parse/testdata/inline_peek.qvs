@@ -1,0 +1,15 @@
+Sub load_metrics
+LOAD * INLINE [
+source_table, flag
+marts.billing_day, 1
+schema_alpha.dict_country, 1
+];
+
+LET vSourceTable = Peek('source_table');
+
+SQL SELECT * FROM $(vSourceTable)
+LEFT JOIN marts.users_dim AS u ON u.id = 1;
+End Sub
+
+LIB CONNECT TO 'vertica';
+Call load_metrics;

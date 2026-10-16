@@ -2,11 +2,13 @@
 
 Sync dbt exposures from BI tools and code repos into your dbt project.
 
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
+
 Go CLI / CronJob with YAML `--config`. One config = one source + one sink.
 
 ## Status
 
-Config contract (T2): full YAML schema, options/filters documented below, source stubs still return `not implemented`. Parsers, sinks, and source implementations follow in later tasks.
+Config contract (T2) is in place. **Parse (T3):** `app/parse` extracts table refs and tags from SQL / Qlik scripts (`FilterQlikScript`, `Tables`, `Tags`). Source stubs still return `not implemented`; sinks and source implementations follow in later tasks.
 
 ## Build & run
 
@@ -17,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected on T2: process loads and validates the full config, then exits with `not implemented` for `source.type`.
+Expected today: process loads and validates the full config, then exits with `not implemented` for `source.type`. Parse is covered by unit tests (`make test`).
 
 ```bash
 make test
@@ -75,6 +77,8 @@ Owners are configured **only** under `default_owner`. Sources may supply an owne
 |--------|---------|
 | `parse.excluded_catalogs` | Drop catalog segment from 3-part refs |
 | `parse.schema_allowlist` | Optional allowlist for valid schemas (no corp names in public defaults) |
+
+Package [`app/parse`](app/parse): `FilterQlikScript` (LIB CONNECT + SUB/CALL), `Tables` (FROM/JOIN / INLINE / `$(var)`), `Tags` (maturity vs labels). Empty `schema_allowlist` uses soft structural heuristics (`main` / `marts` / `core` plus length/underscore rules).
 
 ### Source types
 
@@ -206,6 +210,28 @@ Older deployments used `DBT_EXP_*` (and related) env vars. Mapping highlights:
 | `SIGMA_EXPO_MYSQL_*` / `DBT_EXP_HIVE_*` | shared `SQLCatalog` under `source.mysql` / `source.hive` |
 | `GIT_EXPO_*` (except owners) | `source.gitscan.*` |
 | `DBT_EXP_GIT_*` | `sink.git.*` / `sink.mr.*` |
+
+## Contributors
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/filinspace"><img src="https://avatars.githubusercontent.com/u/117206354?v=4?s=100" width="100px;" alt="filinspace"/><br /><sub><b>filinspace</b></sub></a><br /><a href="https://github.com/barloc/dbt-esync/commits?author=filinspace" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ido177"><img src="https://avatars.githubusercontent.com/u/63454209?v=4?s=100" width="100px;" alt="Kirill Romanikhin"/><br /><sub><b>Kirill Romanikhin</b></sub></a><br /><a href="https://github.com/barloc/dbt-esync/commits?author=ido177" title="Code">💻</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
 
 ## License
 

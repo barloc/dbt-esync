@@ -1,0 +1,7 @@
+Sub load_main
+SQL SELECT * FROM "main"."analytic_demo"."sample_table";
+SQL SELECT * FROM marts.orders_fact;
+End Sub
+
+LIB CONNECT TO 'starrocks';
+Call load_main;
