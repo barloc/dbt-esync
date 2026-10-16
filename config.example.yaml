@@ -1,29 +1,3 @@
-# Minimal stub config for T1. Full schema lands in T2.
-save_path: example_exposures
-
-default_owner:
-  name: analytics
-  email: "@analytics"
-
-manifest:
-  file: ""
-  filter_name: starrocks
-
+# T1: only source.type is read. Full schema in T2.
 source:
   type: growthbook
-  # growthbook: {}
-  # mysql: {}
-  # redash: {}
-  # hive: {}
-  # gitscan: {}
-  # qlik: {}
-
-sink:
-  git:
-    repo_url: "https://git.example.com/org/dbt.git"
-    exposures_path: dbt/models/exposures
-    branch: feature/sync-exposures
-    base_branch: master
-  mr:
-    enabled: false
-    provider: gitlab

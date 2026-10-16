@@ -1,9 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/barloc/dbt-esync/app/run"
@@ -17,13 +14,10 @@ func NewCommand() *cobra.Command {
 		Use:               Name,
 		Short:             "Sync dbt exposures from BI tools and code repos into your dbt project",
 		Version:           "v0.0.0",
+		SilenceUsage:      true,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := run.Run(config); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return err
-			}
-			return nil
+			return run.Run(config)
 		},
 	}
 
