@@ -8,7 +8,7 @@ Go CLI / CronJob with YAML `--config`. One config = one source + one sink.
 
 ## Status
 
-Config contract (T2) is in place. **Parse (T3):** `app/parse` extracts table refs and tags from SQL / Qlik scripts (`FilterQlikScript`, `Tables`, `Tags`). Source stubs still return `not implemented`; sinks and source implementations follow in later tasks.
+Config contract (T2) is in place. **Parse (T3):** `app/parse` extracts table refs and tags from SQL / Qlik scripts. **Manifest / exposure (T4):** `app/manifest` loads `manifest.json` (URL or file) and maps tables → `ref()`/`source()`; `app/exposure` encodes dbt YAML v2. Source stubs still return `not implemented`; sinks and source implementations follow in later tasks.
 
 ## Build & run
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, then exits with `not implemented` for `source.type`. Parse is covered by unit tests (`make test`).
+Expected today: process loads and validates the full config, loads the manifest, then exits with `not implemented` for `source.type`. Parse, manifest, and exposure are covered by unit tests (`make test`).
 
 ```bash
 make test
@@ -71,11 +71,15 @@ Corp CronJobs typically mount a base YAML and inject secrets via these env vars 
 
 Owners are configured **only** under `default_owner`. Sources may supply an owner from their API; otherwise this fallback is used. There are no per-source owner overrides.
 
+Package [`app/manifest`](app/manifest): `Load(ctx, url, file, excludedCatalogs)` → `Finder.Refs(tables)` → `{Found, NotFound}` (`ref('…')` / `source('…', '…')`). Catalog names in `parse.excluded_catalogs` are omitted from lookup keys (same list as parse). `filter_name` is for sources only.
+
+Package [`app/exposure`](app/exposure): `File{Name, Exposures}` → `Encode()` / `Write(dir)` — dbt exposures YAML `version: 2`, sorted by name; empty maturity/tags omitted; multiline descriptions use `|`.
+
 ### Parse
 
 | Option | Meaning |
 |--------|---------|
-| `parse.excluded_catalogs` | Drop catalog segment from 3-part refs |
+| `parse.excluded_catalogs` | Drop catalog segment from 3-part refs; also shapes manifest lookup keys |
 | `parse.schema_allowlist` | Optional allowlist for valid schemas (no corp names in public defaults) |
 
 Package [`app/parse`](app/parse): `FilterQlikScript` (LIB CONNECT + SUB/CALL), `Tables` (FROM/JOIN / INLINE / `$(var)`), `Tags` (maturity vs labels). Empty `schema_allowlist` uses soft structural heuristics (`main` / `marts` / `core` plus length/underscore rules).

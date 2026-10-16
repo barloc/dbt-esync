@@ -7,7 +7,7 @@ default_owner:
   slack: "#analytics"
 
 manifest:
-  file: "testdata/manifest.mini.json"
+  file: "app/manifest/testdata/manifest.mini.json"
   # url: "https://example.com/manifest.json"  # mutually exclusive with file
   filter_name: starrocks
 

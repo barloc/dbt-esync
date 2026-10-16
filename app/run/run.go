@@ -19,12 +19,18 @@ func Run(configPath string) error {
 		return err
 	}
 
+	ctx := context.Background()
+	finder, err := manifest.Load(ctx, cfg.Manifest.URL, cfg.Manifest.File, cfg.Parse.ExcludedCatalogs)
+	if err != nil {
+		return err
+	}
+
 	src, err := source.New(cfg.Source.Type)
 	if err != nil {
 		return err
 	}
 
-	_, err = src.Collect(context.Background(), &manifest.Finder{})
+	_, err = src.Collect(ctx, finder)
 	if err != nil {
 		return fmt.Errorf("source %q: %w", cfg.Source.Type, err)
 	}

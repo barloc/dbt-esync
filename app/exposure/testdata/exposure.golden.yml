@@ -1,0 +1,28 @@
+version: 2
+exposures:
+    - name: alpha_board
+      type: dashboard
+      url: https://example.com/a
+      label: Alpha
+      description: short desc
+      owner:
+        name: analytics
+        email: '@analytics'
+      depends_on:
+        - ref('orders_day')
+        - source('raw', 'clicks')
+      maturity: high
+      tags:
+        - qlik
+        - prod
+    - name: beta_note
+      type: notebook
+      url: https://example.com/b
+      label: Beta
+      description: |
+        line one
+        line two
+      owner:
+        name: analytics
+        email: '@analytics'
+      depends_on: []
