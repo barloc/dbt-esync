@@ -1,0 +1,92 @@
+package config_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/barloc/dbt-esync/app/config"
+)
+
+func TestUnitEnvOverridesWinOverYAML(t *testing.T) {
+	// No t.Parallel: Setenv + Load must not race other Load tests.
+	t.Setenv("DBT_ESYNC_SINK__GIT__TOKEN", "from-env")
+	t.Setenv("DBT_ESYNC_SOURCE__QLIK__PASSWORD", "secret")
+	t.Setenv("DBT_ESYNC_SOURCE__QLIK__STREAM_EXCLUDE", "A, B")
+	t.Setenv("DBT_ESYNC_SINK__MR__ENABLED", "false")
+	t.Setenv("DBT_ESYNC_DEFAULT_OWNER__SLACK", "#ops")
+
+	cfg, err := config.Load(writeTempYAML(t, validQlikYAML()+`
+  mr:
+    enabled: true
+    provider: gitlab
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if cfg.Sink.Git.Token != "from-env" {
+		t.Fatalf("token: got %q", cfg.Sink.Git.Token)
+	}
+	if cfg.Source.Qlik.Password != "secret" {
+		t.Fatalf("password: got %q", cfg.Source.Qlik.Password)
+	}
+	if got := cfg.Source.Qlik.StreamExclude; len(got) != 2 || got[0] != "A" || got[1] != "B" {
+		t.Fatalf("stream_exclude: %v", got)
+	}
+	if cfg.Sink.MR.Enabled {
+		t.Fatal("mr.enabled should be false")
+	}
+	if cfg.DefaultOwner.Slack != "#ops" {
+		t.Fatalf("slack: got %q", cfg.DefaultOwner.Slack)
+	}
+}
+
+func TestUnitEnvOverrideUnknownPath(t *testing.T) {
+	t.Setenv("DBT_ESYNC_NOPE__FIELD", "x")
+	_, err := config.Load(writeTempYAML(t, validQlikYAML()))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitEnvBoolRejectsParseBoolExtras(t *testing.T) {
+	// strconv.ParseBool would accept "t"; we only allow true/false/1/0.
+	t.Setenv("DBT_ESYNC_SINK__MR__ENABLED", "t")
+	_, err := config.Load(writeTempYAML(t, validQlikYAML()))
+	if err == nil || !strings.Contains(err.Error(), "true/false/1/0") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitEnvAllocatesNilSourceBlock(t *testing.T) {
+	t.Setenv("DBT_ESYNC_SOURCE__TYPE", "mysql")
+	t.Setenv("DBT_ESYNC_SOURCE__MYSQL__HOST", "mysql.example.com")
+	t.Setenv("DBT_ESYNC_MANIFEST__FILE", "m.json")
+	t.Setenv("DBT_ESYNC_SINK__GIT__REPO_URL", "https://git.example.com/r.git")
+	t.Setenv("DBT_ESYNC_SINK__GIT__EXPOSURES_PATH", "e")
+
+	cfg, err := config.Load(writeTempYAML(t, `
+source:
+  type: qlik
+manifest:
+  file: unused.json
+sink:
+  git:
+    repo_url: "https://unused.example/r.git"
+    exposures_path: unused
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if cfg.Source.Type != "mysql" {
+		t.Fatalf("type: %q", cfg.Source.Type)
+	}
+	if cfg.Source.MySQL == nil || cfg.Source.MySQL.Host != "mysql.example.com" {
+		t.Fatalf("mysql: %+v", cfg.Source.MySQL)
+	}
+}
