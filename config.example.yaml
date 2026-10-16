@@ -1,0 +1,3 @@
+# T1: only source.type is read. Full schema in T2.
+source:
+  type: growthbook
