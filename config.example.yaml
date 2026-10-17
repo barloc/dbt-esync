@@ -99,7 +99,7 @@ sink:
   git:
     repo_url: "https://git.example.com/org/dbt.git"
     user: bot
-    token: ""
+    token: "set-via-DBT_ESYNC_SINK__GIT__TOKEN"
     local_path: /tmp/dbt_repo
     exposures_path: dbt/models/exposures
     branch: feature/sync-qlik-exposures

@@ -8,7 +8,7 @@ Go CLI / CronJob with YAML `--config`. One config = one source + one sink.
 
 ## Status
 
-Config contract (T2) is in place. **Parse (T3):** `app/parse` extracts table refs and tags from SQL / Qlik scripts. **Manifest / exposure (T4):** `app/manifest` loads `manifest.json` (URL or file) and maps tables → `ref()`/`source()`; `app/exposure` encodes dbt YAML v2. Source stubs still return `not implemented`; sinks and source implementations follow in later tasks.
+Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. Source stubs still return `not implemented`; source implementations follow in S1–S6.
 
 ## Build & run
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then exits with `not implemented` for `source.type`. Parse, manifest, and exposure are covered by unit tests (`make test`).
+Expected today: process loads and validates the full config, loads the manifest, then exits with `not implemented` for `source.type` (sink runs only after Collect succeeds). Parse, manifest, exposure, and sink are covered by unit tests (`make test`).
 
 ```bash
 make test
@@ -62,7 +62,7 @@ Corp CronJobs typically mount a base YAML and inject secrets via these env vars 
 
 | Option | Meaning |
 |--------|---------|
-| `save_path` | Staging / YAML filename prefix |
+| `save_path` | Package directory under `sink.git.exposures_path` (required) |
 | `default_owner.name` | Owner name when the source has none |
 | `default_owner.email` | Owner email fallback |
 | `default_owner.slack` | Optional Slack handle/channel (e.g. gitscan description) |
@@ -171,15 +171,17 @@ Same YAML schema; `source.type` selects the driver only (`hive` vs `mysql`). MyS
 | Option | Meaning |
 |--------|---------|
 | `sink.git.repo_url` | Target dbt repo (required) |
-| `sink.git.user` | Write username |
-| `sink.git.token` | Write token |
-| `sink.git.local_path` | Clone working directory |
-| `sink.git.exposures_path` | Subtree for exposure YAML (required) |
-| `sink.git.branch` | Feature branch to push |
-| `sink.git.base_branch` | MR/PR base branch |
-| `sink.mr.enabled` | Open MR/PR after push |
-| `sink.mr.provider` | `gitlab` or `bitbucket` |
-| `sink.mr.host` | VCS API/host URL |
+| `sink.git.user` | Write username (required) |
+| `sink.git.token` | Write token (required; often via env) |
+| `sink.git.local_path` | Clone working directory (required) |
+| `sink.git.exposures_path` | Parent subtree for packages (required) |
+| `sink.git.branch` | Feature branch to push (required) |
+| `sink.git.base_branch` | Branch Sync starts from / MR target (required) |
+| `sink.mr.enabled` | Open MR/PR after a successful push |
+| `sink.mr.provider` | `gitlab` or `bitbucket` (required when enabled) |
+| `sink.mr.host` | VCS API host URL (required when enabled) |
+
+Package path written by the sink: `{exposures_path}/{save_path}/*.yml`. No diff vs `base_branch` → skip push and MR.
 
 ## Permissions
 

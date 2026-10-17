@@ -66,17 +66,19 @@ func TestUnitEnvAllocatesNilSourceBlock(t *testing.T) {
 	t.Setenv("DBT_ESYNC_MANIFEST__FILE", "m.json")
 	t.Setenv("DBT_ESYNC_SINK__GIT__REPO_URL", "https://git.example.com/r.git")
 	t.Setenv("DBT_ESYNC_SINK__GIT__EXPOSURES_PATH", "e")
+	t.Setenv("DBT_ESYNC_SINK__GIT__USER", "bot")
+	t.Setenv("DBT_ESYNC_SINK__GIT__TOKEN", "tok")
+	t.Setenv("DBT_ESYNC_SINK__GIT__LOCAL_PATH", "/tmp/dbt_repo")
+	t.Setenv("DBT_ESYNC_SINK__GIT__BRANCH", "feature/sync")
+	t.Setenv("DBT_ESYNC_SINK__GIT__BASE_BRANCH", "master")
 
 	cfg, err := config.Load(writeTempYAML(t, `
+save_path: pkg
 source:
   type: qlik
 manifest:
   file: unused.json
-sink:
-  git:
-    repo_url: "https://unused.example/r.git"
-    exposures_path: unused
-`))
+`+validSinkYAML()))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
