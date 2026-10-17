@@ -46,11 +46,32 @@ func New(e config.SourceEntry, deps Deps) (Source, error) {
 			HTTPClient:  deps.HTTPClient,
 		}), nil
 	case "hive":
-		return hive.New(), nil
+		if e.Hive == nil {
+			return nil, fmt.Errorf("hive config is required")
+		}
+		return hive.New(*e.Hive, hive.Options{
+			Owner: deps.Owner,
+			Parse: deps.Parse,
+		}), nil
 	case "gitscan":
-		return gitscan.New(), nil
+		if e.Gitscan == nil {
+			return nil, fmt.Errorf("gitscan config is required")
+		}
+		return gitscan.New(*e.Gitscan, gitscan.Options{
+			Owner:      deps.Owner,
+			Parse:      deps.Parse,
+			FilterName: deps.FilterName,
+		}), nil
 	case "qlik":
-		return qlik.New(), nil
+		if e.Qlik == nil {
+			return nil, fmt.Errorf("qlik config is required")
+		}
+		return qlik.New(*e.Qlik, qlik.Options{
+			PackageName: e.Name,
+			Owner:       deps.Owner,
+			Parse:       deps.Parse,
+			HTTPClient:  deps.HTTPClient,
+		}), nil
 	default:
 		return nil, fmt.Errorf("unknown source.type %q", e.Type)
 	}

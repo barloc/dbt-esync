@@ -34,7 +34,8 @@ func Run(configPath string) error {
 	}
 
 	deps := source.Deps{
-		Owner: cfg.DefaultOwner,
+		Owner:      cfg.DefaultOwner,
+		FilterName: cfg.Manifest.FilterName,
 		Parse: parse.Options{
 			ExcludedCatalogs: cfg.Parse.ExcludedCatalogs,
 			SchemaAllowlist:  cfg.Parse.SchemaAllowlist,
