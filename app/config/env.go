@@ -10,6 +10,7 @@ import (
 
 // EnvPrefix is prepended to override keys. Nesting uses "__" between YAML keys.
 // Example: DBT_ESYNC_SINK__GIT__TOKEN → sink.git.token
+// Slice index: DBT_ESYNC_SOURCE__0__QLIK__PASSWORD → source[0].qlik.password
 const EnvPrefix = "DBT_ESYNC_"
 
 // ApplyEnvOverrides overlays DBT_ESYNC_* environment variables onto cfg.
@@ -49,6 +50,11 @@ func setByYAMLPath(v reflect.Value, segments []string, raw string) error {
 		}
 		v = v.Elem()
 	}
+
+	if v.Kind() == reflect.Slice {
+		return setBySliceIndex(v, segments, raw)
+	}
+
 	if v.Kind() != reflect.Struct {
 		return fmt.Errorf("cannot descend into %s", v.Kind())
 	}
@@ -68,7 +74,34 @@ func setByYAMLPath(v reflect.Value, segments []string, raw string) error {
 		}
 		field = field.Elem()
 	}
-	return setByYAMLPath(field.Addr(), segments[1:], raw)
+	if field.CanAddr() {
+		return setByYAMLPath(field.Addr(), segments[1:], raw)
+	}
+	return setByYAMLPath(field, segments[1:], raw)
+}
+
+func setBySliceIndex(v reflect.Value, segments []string, raw string) error {
+	idx, err := strconv.Atoi(segments[0])
+	if err != nil {
+		return fmt.Errorf("slice index %q: %w", segments[0], err)
+	}
+	if idx < 0 {
+		return fmt.Errorf("negative slice index %d", idx)
+	}
+	if !v.CanSet() {
+		return fmt.Errorf("unsettable slice")
+	}
+	for v.Len() <= idx {
+		v.Set(reflect.Append(v, reflect.Zero(v.Type().Elem())))
+	}
+	elem := v.Index(idx)
+	if len(segments) == 1 {
+		return setLeaf(elem, raw)
+	}
+	if elem.CanAddr() {
+		return setByYAMLPath(elem.Addr(), segments[1:], raw)
+	}
+	return setByYAMLPath(elem, segments[1:], raw)
 }
 
 func fieldByYAMLTag(structVal reflect.Value, key string) (reflect.Value, bool) {

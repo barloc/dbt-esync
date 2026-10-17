@@ -4,7 +4,7 @@ Sync dbt exposures from BI tools and code repos into your dbt project.
 
 [![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
 
-Go CLI / CronJob with YAML `--config`. One config = one source + one sink.
+Go CLI / CronJob with YAML `--config`. One config = N named sources + one sink.
 
 ## Status
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then exits with `not implemented` for `source.type` (sink runs only after Collect succeeds). Parse, manifest, exposure, and sink are covered by unit tests (`make test`).
+Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort); stubs return `not implemented`. Successful packages are synced in one commit; any Collect error makes the process exit non-zero. Parse, manifest, exposure, and sink are covered by unit tests (`make test`).
 
 ```bash
 make test
@@ -44,14 +44,15 @@ After the YAML file is loaded, any `DBT_ESYNC_*` environment variable overrides 
 | Int | decimal |
 | String lists | comma-separated (`A, B` → `["A","B"]`) |
 | Unknown path | Load fails |
-| Nil nested blocks | allocated when an override targets them (e.g. `SOURCE__MYSQL__HOST`) |
+| Nil nested blocks | allocated when an override targets them (e.g. `SOURCE__0__MYSQL__HOST`) |
+| Array index | numeric segment after the list key (`SOURCE__0__…` → `source[0]`) |
 
 Examples:
 
 ```bash
 export DBT_ESYNC_SINK__GIT__TOKEN=...
-export DBT_ESYNC_SOURCE__QLIK__PASSWORD=...
-export DBT_ESYNC_SOURCE__QLIK__STREAM_EXCLUDE="99-Archive,92-TMP"
+export DBT_ESYNC_SOURCE__0__QLIK__PASSWORD=...
+export DBT_ESYNC_SOURCE__0__QLIK__STREAM_EXCLUDE="99-Archive,92-TMP"
 export DBT_ESYNC_SINK__MR__ENABLED=false
 export DBT_ESYNC_DEFAULT_OWNER__SLACK="#analytics"
 ```
@@ -62,7 +63,6 @@ Corp CronJobs typically mount a base YAML and inject secrets via these env vars 
 
 | Option | Meaning |
 |--------|---------|
-| `save_path` | Package directory under `sink.git.exposures_path` (required) |
 | `default_owner.name` | Owner name when the source has none |
 | `default_owner.email` | Owner email fallback |
 | `default_owner.slack` | Optional Slack handle/channel (e.g. gitscan description) |
@@ -84,12 +84,20 @@ Package [`app/exposure`](app/exposure): `File{Name, Exposures}` → `Encode()` /
 
 Package [`app/parse`](app/parse): `FilterQlikScript` (LIB CONNECT + SUB/CALL), `Tables` (FROM/JOIN / INLINE / `$(var)`), `Tags` (maturity vs labels). Empty `schema_allowlist` uses soft structural heuristics (`main` / `marts` / `core` plus length/underscore rules).
 
-### Source types
+### Sources
 
-Set `source.type`, then fill the matching nested block.
+`source` is a **non-empty array**. Each entry:
 
-| `source.type` | Package | Status |
-|---------------|---------|--------|
+| Field | Meaning |
+|-------|---------|
+| `name` | Package directory under `sink.git.exposures_path` (required; unique; no `/`, `\`, or `..`) |
+| `type` | Collector type (required) |
+| typed block | Matching nested options (`qlik`, `redash`, …) |
+
+Collect runs every entry (best-effort). Successful packages are written in one sink commit; any Collect failure still exits non-zero after sync.
+
+| `type` | Package | Status |
+|--------|---------|--------|
 | `growthbook` | `app/source/growthbook` | stub |
 | `mysql` | `app/source/mysql` | stub |
 | `redash` | `app/source/redash` | stub |
@@ -97,7 +105,7 @@ Set `source.type`, then fill the matching nested block.
 | `gitscan` | `app/source/gitscan` | stub |
 | `qlik` | `app/source/qlik` | stub |
 
-#### Qlik (`source.qlik`)
+#### Qlik (`qlik` block)
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -114,7 +122,7 @@ Set `source.type`, then fill the matching nested block.
 | `qrc.user_directory` | QRC identity directory |
 | `qrc.user_id` | QRC identity user |
 
-#### Redash (`source.redash`)
+#### Redash (`redash` block)
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -124,7 +132,7 @@ Set `source.type`, then fill the matching nested block.
 | `entity_types` | `dashboard` and/or `alerts` |
 | `host_to_display` | URL written into exposures |
 
-#### Gitscan (`source.gitscan`)
+#### Gitscan (`gitscan` block)
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -137,9 +145,9 @@ Set `source.type`, then fill the matching nested block.
 | `path_db_tokens` | Path tokens matched with `manifest.filter_name` |
 | `vcs` | `gitlab` \| `bitbucket` (browse URL shape) |
 
-#### Hive / MySQL SQL catalog (`source.hive` / `source.mysql`)
+#### Hive / MySQL SQL catalog (`hive` / `mysql` blocks)
 
-Same YAML schema; `source.type` selects the driver only (`hive` vs `mysql`). MySQL is the ex-Sigma SQL catalog.
+Same YAML schema; `type` selects the driver only (`hive` vs `mysql`). MySQL is the ex-Sigma SQL catalog.
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -157,7 +165,7 @@ Same YAML schema; `source.type` selects the driver only (`hive` vs `mysql`). MyS
 | `exposure_prefix` | Exposure name prefix |
 | `exposure_url_template` | UI link (`{{.ID}}`, …) |
 
-#### GrowthBook (`source.growthbook`)
+#### GrowthBook (`growthbook` block)
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -181,7 +189,7 @@ Same YAML schema; `source.type` selects the driver only (`hive` vs `mysql`). MyS
 | `sink.mr.provider` | `gitlab` or `bitbucket` (required when enabled) |
 | `sink.mr.host` | VCS API host URL (required when enabled) |
 
-Package path written by the sink: `{exposures_path}/{save_path}/*.yml`. No diff vs `base_branch` → skip push and MR.
+Package path written by the sink: `{exposures_path}/{source[].name}/*.yml` (one subtree per successful source). No diff vs `base_branch` → skip push and MR.
 
 ## Permissions
 
@@ -207,14 +215,15 @@ Older deployments used `DBT_EXP_*` (and related) env vars. Mapping highlights:
 
 | Legacy | YAML |
 |--------|------|
-| `DBT_EXP_SOURCE_NAME` | `source.type` |
+| `DBT_EXP_SOURCE_NAME` | `source[].type` (+ `source[].name` for package dir; was `save_path`) |
+| `DBT_EXP_SAVE_PATH` | `source[].name` |
 | `from_sigma` | `mysql` |
 | `from_git` | `gitscan` |
 | `from_hive` | `hive` |
 | `DBT_EXP_APP_EXCLUDE` / `APP_INCLUDE` | `qlik.stream_exclude` / `stream_include` (streams, not apps) |
 | `DBT_EXP_DEFAULT_OWNER_*` / `GIT_EXPO_OWNERS` | `default_owner.*` (not per-source) |
-| `SIGMA_EXPO_MYSQL_*` / `DBT_EXP_HIVE_*` | shared `SQLCatalog` under `source.mysql` / `source.hive` |
-| `GIT_EXPO_*` (except owners) | `source.gitscan.*` |
+| `SIGMA_EXPO_MYSQL_*` / `DBT_EXP_HIVE_*` | shared `SQLCatalog` under `mysql` / `hive` blocks |
+| `GIT_EXPO_*` (except owners) | `gitscan` block |
 | `DBT_EXP_GIT_*` | `sink.git.*` / `sink.mr.*` |
 
 ## Contributors

@@ -10,8 +10,8 @@ import (
 func TestUnitEnvOverridesWinOverYAML(t *testing.T) {
 	// No t.Parallel: Setenv + Load must not race other Load tests.
 	t.Setenv("DBT_ESYNC_SINK__GIT__TOKEN", "from-env")
-	t.Setenv("DBT_ESYNC_SOURCE__QLIK__PASSWORD", "secret")
-	t.Setenv("DBT_ESYNC_SOURCE__QLIK__STREAM_EXCLUDE", "A, B")
+	t.Setenv("DBT_ESYNC_SOURCE__0__QLIK__PASSWORD", "secret")
+	t.Setenv("DBT_ESYNC_SOURCE__0__QLIK__STREAM_EXCLUDE", "A, B")
 	t.Setenv("DBT_ESYNC_SINK__MR__ENABLED", "false")
 	t.Setenv("DBT_ESYNC_DEFAULT_OWNER__SLACK", "#ops")
 
@@ -29,10 +29,10 @@ func TestUnitEnvOverridesWinOverYAML(t *testing.T) {
 	if cfg.Sink.Git.Token != "from-env" {
 		t.Fatalf("token: got %q", cfg.Sink.Git.Token)
 	}
-	if cfg.Source.Qlik.Password != "secret" {
-		t.Fatalf("password: got %q", cfg.Source.Qlik.Password)
+	if cfg.Source[0].Qlik.Password != "secret" {
+		t.Fatalf("password: got %q", cfg.Source[0].Qlik.Password)
 	}
-	if got := cfg.Source.Qlik.StreamExclude; len(got) != 2 || got[0] != "A" || got[1] != "B" {
+	if got := cfg.Source[0].Qlik.StreamExclude; len(got) != 2 || got[0] != "A" || got[1] != "B" {
 		t.Fatalf("stream_exclude: %v", got)
 	}
 	if cfg.Sink.MR.Enabled {
@@ -61,8 +61,9 @@ func TestUnitEnvBoolRejectsParseBoolExtras(t *testing.T) {
 }
 
 func TestUnitEnvAllocatesNilSourceBlock(t *testing.T) {
-	t.Setenv("DBT_ESYNC_SOURCE__TYPE", "mysql")
-	t.Setenv("DBT_ESYNC_SOURCE__MYSQL__HOST", "mysql.example.com")
+	t.Setenv("DBT_ESYNC_SOURCE__0__TYPE", "mysql")
+	t.Setenv("DBT_ESYNC_SOURCE__0__NAME", "pkg")
+	t.Setenv("DBT_ESYNC_SOURCE__0__MYSQL__HOST", "mysql.example.com")
 	t.Setenv("DBT_ESYNC_MANIFEST__FILE", "m.json")
 	t.Setenv("DBT_ESYNC_SINK__GIT__REPO_URL", "https://git.example.com/r.git")
 	t.Setenv("DBT_ESYNC_SINK__GIT__EXPOSURES_PATH", "e")
@@ -73,9 +74,9 @@ func TestUnitEnvAllocatesNilSourceBlock(t *testing.T) {
 	t.Setenv("DBT_ESYNC_SINK__GIT__BASE_BRANCH", "master")
 
 	cfg, err := config.Load(writeTempYAML(t, `
-save_path: pkg
 source:
-  type: qlik
+  - name: unused
+    type: qlik
 manifest:
   file: unused.json
 `+validSinkYAML()))
@@ -85,10 +86,10 @@ manifest:
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	if cfg.Source.Type != "mysql" {
-		t.Fatalf("type: %q", cfg.Source.Type)
+	if cfg.Source[0].Type != "mysql" {
+		t.Fatalf("type: %q", cfg.Source[0].Type)
 	}
-	if cfg.Source.MySQL == nil || cfg.Source.MySQL.Host != "mysql.example.com" {
-		t.Fatalf("mysql: %+v", cfg.Source.MySQL)
+	if cfg.Source[0].MySQL == nil || cfg.Source[0].MySQL.Host != "mysql.example.com" {
+		t.Fatalf("mysql: %+v", cfg.Source[0].MySQL)
 	}
 }

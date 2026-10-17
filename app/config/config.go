@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -12,12 +13,11 @@ import (
 
 // Config is the full dbt-esync YAML schema.
 type Config struct {
-	SavePath     string       `yaml:"save_path"`
-	DefaultOwner DefaultOwner `yaml:"default_owner"`
-	Manifest     Manifest     `yaml:"manifest"`
-	Parse        Parse        `yaml:"parse"`
-	Source       Source       `yaml:"source"`
-	Sink         Sink         `yaml:"sink"`
+	DefaultOwner DefaultOwner  `yaml:"default_owner"`
+	Manifest     Manifest      `yaml:"manifest"`
+	Parse        Parse         `yaml:"parse"`
+	Source       []SourceEntry `yaml:"source"`
+	Sink         Sink          `yaml:"sink"`
 }
 
 // DefaultOwner is used when a source does not provide an owner.
@@ -41,8 +41,10 @@ type Parse struct {
 	SchemaAllowlist  []string `yaml:"schema_allowlist"`
 }
 
-// Source selects one collector and its typed options.
-type Source struct {
+// SourceEntry is one named collector in the source array.
+// Name is the package directory under sink.git.exposures_path.
+type SourceEntry struct {
+	Name       string            `yaml:"name"`
 	Type       string            `yaml:"type"`
 	Qlik       *QlikConfig       `yaml:"qlik,omitempty"`
 	Redash     *RedashConfig     `yaml:"redash,omitempty"`
@@ -52,7 +54,7 @@ type Source struct {
 	GrowthBook *GrowthBookConfig `yaml:"growthbook,omitempty"`
 }
 
-// QlikConfig is source.type: qlik.
+// QlikConfig is source[].type: qlik.
 type QlikConfig struct {
 	Host                string    `yaml:"host"`
 	User                string    `yaml:"user"`
@@ -73,7 +75,7 @@ type QRCConfig struct {
 	UserID        string `yaml:"user_id"`
 }
 
-// RedashConfig is source.type: redash.
+// RedashConfig is source[].type: redash.
 type RedashConfig struct {
 	Host                   string   `yaml:"host"`
 	APIKey                 string   `yaml:"api_key"`
@@ -82,7 +84,7 @@ type RedashConfig struct {
 	HostToDisplay          string   `yaml:"host_to_display"`
 }
 
-// GitscanConfig is source.type: gitscan.
+// GitscanConfig is source[].type: gitscan.
 type GitscanConfig struct {
 	RepoURL      string   `yaml:"repo_url"`
 	Login        string   `yaml:"login"`
@@ -94,7 +96,7 @@ type GitscanConfig struct {
 	VCS          string   `yaml:"vcs"`
 }
 
-// SQLCatalog is the shared schema for source.type hive and mysql:
+// SQLCatalog is the shared schema for source[].type hive and mysql:
 // read rows (id + SQL/script text) from a table or custom query.
 type SQLCatalog struct {
 	Host                string `yaml:"host"`
@@ -112,7 +114,7 @@ type SQLCatalog struct {
 	ExposureURLTemplate string `yaml:"exposure_url_template"`
 }
 
-// GrowthBookConfig is source.type: growthbook.
+// GrowthBookConfig is source[].type: growthbook.
 type GrowthBookConfig struct {
 	Host         string `yaml:"host"`
 	APIKey       string `yaml:"api_key"`
@@ -163,11 +165,8 @@ func Load(path string) (*Config, error) {
 
 // Validate checks required fields and invariants.
 func (c *Config) Validate() error {
-	if c.Source.Type == "" {
-		return fmt.Errorf("config: source.type is required")
-	}
-	if !knownSourceType(c.Source.Type) {
-		return fmt.Errorf("config: unknown source.type %q", c.Source.Type)
+	if len(c.Source) == 0 {
+		return fmt.Errorf("config: source must contain at least one entry")
 	}
 
 	hasURL := c.Manifest.URL != ""
@@ -179,31 +178,67 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: manifest.url or manifest.file is required")
 	}
 
-	if c.SavePath == "" {
-		return fmt.Errorf("config: save_path is required")
-	}
 	if err := c.validateSink(); err != nil {
 		return err
 	}
 
-	switch c.Source.Type {
-	case "qlik":
-		return requireHostBlock("source.qlik", c.Source.Qlik == nil, func() string { return c.Source.Qlik.Host })
-	case "redash":
-		return requireHostBlock("source.redash", c.Source.Redash == nil, func() string { return c.Source.Redash.Host })
-	case "gitscan":
-		if c.Source.Gitscan == nil {
-			return fmt.Errorf("config: source.gitscan is required when source.type is gitscan")
+	seen := make(map[string]struct{}, len(c.Source))
+	for i := range c.Source {
+		if err := validateSourceEntry(i, &c.Source[i], seen); err != nil {
+			return err
 		}
-		if c.Source.Gitscan.RepoURL == "" {
-			return fmt.Errorf("config: source.gitscan.repo_url is required")
+	}
+	return nil
+}
+
+func validateSourceEntry(i int, e *SourceEntry, seen map[string]struct{}) error {
+	prefix := fmt.Sprintf("source[%d]", i)
+	if e.Name == "" {
+		return fmt.Errorf("config: %s.name is required", prefix)
+	}
+	if err := validatePackageName(e.Name); err != nil {
+		return fmt.Errorf("config: %s.name: %w", prefix, err)
+	}
+	if _, dup := seen[e.Name]; dup {
+		return fmt.Errorf("config: duplicate source name %q", e.Name)
+	}
+	seen[e.Name] = struct{}{}
+
+	if e.Type == "" {
+		return fmt.Errorf("config: %s.type is required", prefix)
+	}
+	if !knownSourceType(e.Type) {
+		return fmt.Errorf("config: %s: unknown source.type %q", prefix, e.Type)
+	}
+
+	switch e.Type {
+	case "qlik":
+		return requireHostBlock(prefix+".qlik", e.Qlik == nil, func() string { return e.Qlik.Host })
+	case "redash":
+		return requireHostBlock(prefix+".redash", e.Redash == nil, func() string { return e.Redash.Host })
+	case "gitscan":
+		if e.Gitscan == nil {
+			return fmt.Errorf("config: %s.gitscan is required when type is gitscan", prefix)
+		}
+		if e.Gitscan.RepoURL == "" {
+			return fmt.Errorf("config: %s.gitscan.repo_url is required", prefix)
 		}
 	case "hive":
-		return requireSQLCatalog("source.hive", c.Source.Hive)
+		return requireSQLCatalog(prefix+".hive", e.Hive)
 	case "mysql":
-		return requireSQLCatalog("source.mysql", c.Source.MySQL)
+		return requireSQLCatalog(prefix+".mysql", e.MySQL)
 	case "growthbook":
-		return requireHostBlock("source.growthbook", c.Source.GrowthBook == nil, func() string { return c.Source.GrowthBook.Host })
+		return requireHostBlock(prefix+".growthbook", e.GrowthBook == nil, func() string { return e.GrowthBook.Host })
+	}
+	return nil
+}
+
+func validatePackageName(name string) error {
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("must not contain path separators")
+	}
+	if name == ".." {
+		return fmt.Errorf("invalid package name %q", name)
 	}
 	return nil
 }

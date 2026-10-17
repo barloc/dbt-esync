@@ -11,7 +11,7 @@ import (
 	"github.com/barloc/dbt-esync/app/source/redash"
 )
 
-// KnownTypes lists supported source.type values.
+// KnownTypes lists supported source[].type values.
 var KnownTypes = []string{
 	"growthbook",
 	"mysql",

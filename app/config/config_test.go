@@ -19,25 +19,28 @@ func TestUnitLoadAndValidateQlikExample(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	if cfg.Source.Type != "qlik" {
-		t.Fatalf("type: got %q", cfg.Source.Type)
+	if len(cfg.Source) != 1 || cfg.Source[0].Type != "qlik" {
+		t.Fatalf("source: %+v", cfg.Source)
 	}
-	if cfg.Source.Qlik == nil {
-		t.Fatal("expected source.qlik")
+	if cfg.Source[0].Name != "bi_qlik_sense" {
+		t.Fatalf("name: got %q", cfg.Source[0].Name)
+	}
+	if cfg.Source[0].Qlik == nil {
+		t.Fatal("expected source[0].qlik")
 	}
 }
 
 func TestUnitAcceptStreamLists(t *testing.T) {
 	cfg, err := config.Load(writeTempYAML(t, `
-save_path: bi_qlik_sense
 manifest:
   file: m.json
 source:
-  type: qlik
-  qlik:
-    host: qlik.example.com
-    stream_include: ["Prod", "Shared"]
-    stream_exclude: ["99-Archive", "92-TMP"]
+  - name: bi_qlik_sense
+    type: qlik
+    qlik:
+      host: qlik.example.com
+      stream_include: ["Prod", "Shared"]
+      stream_exclude: ["99-Archive", "92-TMP"]
 `+validSinkYAML()))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -45,26 +48,70 @@ source:
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	gotIn := cfg.Source.Qlik.StreamInclude
+	gotIn := cfg.Source[0].Qlik.StreamInclude
 	if len(gotIn) != 2 || gotIn[0] != "Prod" || gotIn[1] != "Shared" {
 		t.Fatalf("stream_include: got %v", gotIn)
 	}
-	gotEx := cfg.Source.Qlik.StreamExclude
+	gotEx := cfg.Source[0].Qlik.StreamExclude
 	if len(gotEx) != 2 || gotEx[0] != "99-Archive" || gotEx[1] != "92-TMP" {
 		t.Fatalf("stream_exclude: got %v", gotEx)
 	}
 }
 
-func TestUnitValidateRequiresSavePath(t *testing.T) {
+func TestUnitValidateRequiresSourceEntries(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "save_path is required") {
+	if err == nil || !strings.Contains(err.Error(), "source must contain at least one entry") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitValidateRequiresName(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Manifest: config.Manifest{File: "m.json"},
+		Source:   []config.SourceEntry{{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Sink:     config.Sink{Git: validGitSink()},
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "name is required") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitValidateRejectsBadPackageName(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"a/b", `a\b`, ".."} {
+		cfg := &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: name, Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+		err := cfg.Validate()
+		if err == nil {
+			t.Fatalf("name %q: expected error", name)
+		}
+	}
+}
+
+func TestUnitValidateRejectsDuplicateName(t *testing.T) {
+	t.Parallel()
+
+	entry := config.SourceEntry{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}
+	cfg := &config.Config{
+		Manifest: config.Manifest{File: "m.json"},
+		Source:   []config.SourceEntry{entry, entry},
+		Sink:     config.Sink{Git: validGitSink()},
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "duplicate source name") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -73,12 +120,12 @@ func TestUnitValidateRejectsEmptyType(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{File: "m.json"},
+		Source:   []config.SourceEntry{{Name: "pkg"}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "source.type is required") {
+	if err == nil || !strings.Contains(err.Error(), "type is required") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -87,9 +134,8 @@ func TestUnitValidateRejectsUnknownType(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   config.Source{Type: "nope"},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "nope"}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	err := cfg.Validate()
@@ -102,9 +148,8 @@ func TestUnitValidateManifestExclusive(t *testing.T) {
 	t.Parallel()
 
 	both := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{URL: "https://example/m.json", File: "m.json"},
-		Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	if err := both.Validate(); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
@@ -112,9 +157,8 @@ func TestUnitValidateManifestExclusive(t *testing.T) {
 	}
 
 	neither := &config.Config{
-		SavePath: "pkg",
-		Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
-		Sink:     config.Sink{Git: validGitSink()},
+		Source: []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Sink:   config.Sink{Git: validGitSink()},
 	}
 	if err := neither.Validate(); err == nil || !strings.Contains(err.Error(), "manifest.url or manifest.file") {
 		t.Fatalf("neither: got %v", err)
@@ -125,13 +169,12 @@ func TestUnitValidateRequiresSourceBlock(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   config.Source{Type: "qlik"},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik"}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "source.qlik is required") {
+	if err == nil || !strings.Contains(err.Error(), "qlik is required") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -140,9 +183,8 @@ func TestUnitValidateRequiresSinkGit(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
 	}
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "sink.git.repo_url") {
@@ -156,9 +198,8 @@ func TestUnitValidateRequiresExposuresPath(t *testing.T) {
 	g := validGitSink()
 	g.ExposuresPath = ""
 	cfg := &config.Config{
-		SavePath: "pkg",
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
 		Sink:     config.Sink{Git: g},
 	}
 	err := cfg.Validate()
@@ -187,9 +228,8 @@ func TestUnitValidateRequiresSinkGitFields(t *testing.T) {
 			g := validGitSink()
 			tc.mut(&g)
 			cfg := &config.Config{
-				SavePath: "pkg",
 				Manifest: config.Manifest{File: "m.json"},
-				Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
+				Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
 				Sink:     config.Sink{Git: g},
 			}
 			err := cfg.Validate()
@@ -205,9 +245,8 @@ func TestUnitValidateMRWhenEnabled(t *testing.T) {
 
 	base := func(mr config.MRSink) *config.Config {
 		return &config.Config{
-			SavePath: "pkg",
 			Manifest: config.Manifest{File: "m.json"},
-			Source:   config.Source{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
 			Sink:     config.Sink{Git: validGitSink(), MR: mr},
 		}
 	}
@@ -231,25 +270,25 @@ func TestUnitValidateMRWhenEnabled(t *testing.T) {
 
 func TestUnitSQLCatalogSharedSchema(t *testing.T) {
 	body := `
-save_path: cat_pkg
 manifest:
   file: m.json
 source:
-  type: %s
-  %s:
-    host: db.example.com
-    port: 10000
-    user: readonly
-    password: ""
-    database: scripts
-    table: catalog
-    id_column: id
-    sql_column: body
-    description_column: description
-    extra_filters: "status = 'active'"
-    exposure_prefix: cat
-    exposure_url_template: "https://example.com/item/{{.ID}}"
-`+validSinkYAML()
+  - name: cat_pkg
+    type: %s
+    %s:
+      host: db.example.com
+      port: 10000
+      user: readonly
+      password: ""
+      database: scripts
+      table: catalog
+      id_column: id
+      sql_column: body
+      description_column: description
+      extra_filters: "status = 'active'"
+      exposure_prefix: cat
+      exposure_url_template: "https://example.com/item/{{.ID}}"
+` + validSinkYAML()
 	for _, typ := range []string{"hive", "mysql"} {
 		t.Run(typ, func(t *testing.T) {
 			cfg, err := config.Load(writeTempYAML(t, fmt.Sprintf(body, typ, typ)))
@@ -261,9 +300,9 @@ source:
 			}
 			var cat *config.SQLCatalog
 			if typ == "hive" {
-				cat = cfg.Source.Hive
+				cat = cfg.Source[0].Hive
 			} else {
-				cat = cfg.Source.MySQL
+				cat = cfg.Source[0].MySQL
 			}
 			if cat == nil || cat.Database != "scripts" || cat.SQLColumn != "body" {
 				t.Fatalf("%s catalog: %+v", typ, cat)
@@ -310,7 +349,6 @@ sink:
 
 func validQlikYAML() string {
 	return `
-save_path: bi_qlik_sense
 default_owner:
   name: analytics
   email: "@analytics"
@@ -320,14 +358,15 @@ manifest:
 parse:
   excluded_catalogs: ["main"]
 source:
-  type: qlik
-  qlik:
-    host: qlik.example.com
-    user: "DOMAIN\\user"
-    password: ""
-    datasource: starrocks
-    stream_exclude: ["99-Archive", "92-TMP"]
-    stream_include: []
-    exposure_url_template: "https://qlik.example.com/sense/app/{{.AppID}}"
+  - name: bi_qlik_sense
+    type: qlik
+    qlik:
+      host: qlik.example.com
+      user: "DOMAIN\\user"
+      password: ""
+      datasource: starrocks
+      stream_exclude: ["99-Archive", "92-TMP"]
+      stream_include: []
+      exposure_url_template: "https://qlik.example.com/sense/app/{{.AppID}}"
 ` + validSinkYAML()
 }

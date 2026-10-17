@@ -2,7 +2,9 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/barloc/dbt-esync/app/config"
 	"github.com/barloc/dbt-esync/app/manifest"
@@ -11,7 +13,10 @@ import (
 	"github.com/barloc/dbt-esync/app/source"
 )
 
-// Run loads config, collects exposures, pushes them to the sink repo, and opens an MR/PR when enabled.
+// Run loads config, collects exposures from all sources (best-effort), pushes
+// successful packages to the sink repo, and opens an MR/PR when enabled.
+// If any Collect fails, successful packages are still synced, then a joined
+// error is returned.
 func Run(configPath string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -27,24 +32,65 @@ func Run(configPath string) error {
 		return err
 	}
 
-	src, err := source.New(cfg.Source.Type)
-	if err != nil {
-		return err
-	}
+	packages, collectErrs := collectAll(ctx, finder, cfg.Source)
 
-	files, err := src.Collect(ctx, finder)
-	if err != nil {
-		return fmt.Errorf("source %q: %w", cfg.Source.Type, err)
-	}
-
-	pushed, err := sinkgit.Sync(ctx, cfg.Sink.Git, cfg.Sink.Git.BaseBranch, cfg.SavePath, files)
-	if err != nil {
-		return err
-	}
-	if pushed && cfg.Sink.MR.Enabled {
-		if err := vcs.Open(ctx, cfg.Sink.MR, cfg.Sink.Git, cfg.SavePath); err != nil {
-			return err
+	if len(packages) > 0 {
+		pushed, err := sinkgit.Sync(ctx, cfg.Sink.Git, cfg.Sink.Git.BaseBranch, packages)
+		if err != nil {
+			return withCollectErrs(collectErrs, err)
+		}
+		if pushed && cfg.Sink.MR.Enabled {
+			if err := vcs.Open(ctx, cfg.Sink.MR, cfg.Sink.Git, packageNames(packages)); err != nil {
+				return withCollectErrs(collectErrs, err)
+			}
 		}
 	}
-	return nil
+
+	return withCollectErrs(collectErrs, nil)
+}
+
+// withCollectErrs returns collectErrs joined with err (if any). Collect failures
+// are never dropped when a later step also fails.
+func withCollectErrs(collectErrs []error, err error) error {
+	if err == nil {
+		if len(collectErrs) == 0 {
+			return nil
+		}
+		return errors.Join(collectErrs...)
+	}
+	if len(collectErrs) == 0 {
+		return err
+	}
+	return errors.Join(append(append([]error{}, collectErrs...), err)...)
+}
+
+// newSource builds a collector; overridden in tests.
+var newSource = source.New
+
+func collectAll(ctx context.Context, finder *manifest.Finder, entries []config.SourceEntry) ([]sinkgit.Package, []error) {
+	var packages []sinkgit.Package
+	var errs []error
+	for i := range entries {
+		e := &entries[i]
+		src, err := newSource(e.Type)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
+			continue
+		}
+		files, err := src.Collect(ctx, finder)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
+			continue
+		}
+		packages = append(packages, sinkgit.Package{Name: e.Name, Files: files})
+	}
+	return packages, errs
+}
+
+func packageNames(packages []sinkgit.Package) string {
+	names := make([]string, len(packages))
+	for i := range packages {
+		names[i] = packages[i].Name
+	}
+	return strings.Join(names, ", ")
 }

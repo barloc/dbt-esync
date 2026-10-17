@@ -20,7 +20,7 @@ import (
 
 func TestUnitSyncPushThenNoop(t *testing.T) {
 	remote := initBareRemote(t)
-	files := sampleFiles()
+	pkgs := []sinkgit.Package{{Name: "bi_qlik", Files: sampleFiles()}}
 
 	cfg := appconfig.GitSink{
 		RepoURL:       remote,
@@ -32,7 +32,7 @@ func TestUnitSyncPushThenNoop(t *testing.T) {
 		BaseBranch:    "master",
 	}
 
-	pushed, err := sinkgit.Sync(context.Background(), cfg, "master", "bi_qlik", files)
+	pushed, err := sinkgit.Sync(context.Background(), cfg, "master", pkgs)
 	if err != nil {
 		t.Fatalf("first Sync: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestUnitSyncPushThenNoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written yaml: %v", err)
 	}
-	want, err := files[0].Encode()
+	want, err := pkgs[0].Files[0].Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestUnitSyncPushThenNoop(t *testing.T) {
 	mergeFeatureIntoMaster(t, remote, "feature/sync", "master")
 
 	cfg.LocalPath = filepath.Join(t.TempDir(), "clone2")
-	pushed, err = sinkgit.Sync(context.Background(), cfg, "master", "bi_qlik", files)
+	pushed, err = sinkgit.Sync(context.Background(), cfg, "master", pkgs)
 	if err != nil {
 		t.Fatalf("second Sync: %v", err)
 	}
@@ -66,9 +66,60 @@ func TestUnitSyncPushThenNoop(t *testing.T) {
 	}
 }
 
-func TestUnitSyncRejectsEmptyPackage(t *testing.T) {
+func TestUnitSyncMultiplePackages(t *testing.T) {
+	remote := initBareRemote(t)
+	pkgs := []sinkgit.Package{
+		{Name: "bi_qlik", Files: sampleFiles()},
+		{Name: "bi_redash", Files: []exposure.File{{
+			Name: "alert",
+			Exposures: []exposure.Exposure{{
+				Name:       "exp_b",
+				Type:       "analysis",
+				URL:        "https://example.com/b",
+				Label:      "B",
+				OwnerName:  "analytics",
+				OwnerEmail: "@analytics",
+				DependsOn:  []string{"ref('n')"},
+			}},
+		}}},
+	}
+
+	cfg := appconfig.GitSink{
+		RepoURL:       remote,
+		User:          "bot",
+		Token:         "tok",
+		LocalPath:     filepath.Join(t.TempDir(), "clone"),
+		ExposuresPath: "dbt/models/exposures",
+		Branch:        "feature/sync",
+		BaseBranch:    "master",
+	}
+
+	pushed, err := sinkgit.Sync(context.Background(), cfg, "master", pkgs)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if !pushed {
+		t.Fatal("expected push")
+	}
+	for _, name := range []string{"bi_qlik/dash.yml", "bi_redash/alert.yml"} {
+		path := filepath.Join(cfg.LocalPath, "dbt/models/exposures", name)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("missing %s: %v", name, err)
+		}
+	}
+}
+
+func TestUnitSyncRejectsEmptyPackages(t *testing.T) {
 	t.Parallel()
-	_, err := sinkgit.Sync(context.Background(), appconfig.GitSink{}, "master", "", nil)
+	_, err := sinkgit.Sync(context.Background(), appconfig.GitSink{}, "master", nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestUnitSyncRejectsEmptyPackageName(t *testing.T) {
+	t.Parallel()
+	_, err := sinkgit.Sync(context.Background(), appconfig.GitSink{}, "master", []sinkgit.Package{{Name: ""}})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -79,7 +130,7 @@ func TestUnitSyncRejectsDangerousLocalPath(t *testing.T) {
 	_, err := sinkgit.Sync(context.Background(), appconfig.GitSink{
 		RepoURL: "file:///tmp/x", LocalPath: ".", User: "u", Token: "t",
 		ExposuresPath: "e", Branch: "b", BaseBranch: "master",
-	}, "master", "pkg", nil)
+	}, "master", []sinkgit.Package{{Name: "pkg"}})
 	if err == nil || !strings.Contains(err.Error(), "refusing to wipe") {
 		t.Fatalf("got %v", err)
 	}
@@ -98,7 +149,7 @@ func TestUnitSyncNonDefaultBaseBranch(t *testing.T) {
 		Branch:        "feature/from-develop",
 		BaseBranch:    "develop",
 	}
-	pushed, err := sinkgit.Sync(context.Background(), cfg, "develop", "bi_qlik", sampleFiles())
+	pushed, err := sinkgit.Sync(context.Background(), cfg, "develop", []sinkgit.Package{{Name: "bi_qlik", Files: sampleFiles()}})
 	if err != nil {
 		t.Fatalf("Sync: %v", err)
 	}

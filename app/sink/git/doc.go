@@ -1,2 +1,2 @@
-// Package git clones the target dbt repo, replaces the exposures subtree, and pushes (T5).
+// Package git clones the target dbt repo, replaces one or more exposures packages, and pushes.
 package git

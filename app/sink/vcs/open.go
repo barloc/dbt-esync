@@ -98,7 +98,7 @@ func postJSON(ctx context.Context, endpoint string, hdr http.Header, payload any
 	if err != nil {
 		return 0, "", fmt.Errorf("sink/vcs: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	return resp.StatusCode, string(b), nil
 }
