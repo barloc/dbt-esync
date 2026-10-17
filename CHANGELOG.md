@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.2] — 2026-10-18
+
+### Fixed
+
+- Qlik `qrc.cert_b64`: also strip literal `\\n` / `\\r` sequences (Airflow Variable / Python `replace('\\n','')` shape), keep only StdEncoding alphabet
+
 ## [1.0.1] — 2026-10-17
 
 ### Fixed

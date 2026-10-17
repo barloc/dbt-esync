@@ -117,15 +117,22 @@ func tlsFromClientMaterial(certB64, password string) (*tls.Config, error) {
 	}, nil
 }
 
+// stripBase64 cleans material copied from Airflow Variables / env.
+// Python QRCConnector does cert.replace('\\n', '') — vars often store the
+// two-char sequence backslash-n, not a real newline. Real whitespace is
+// stripped too. Only A–Z a–z 0–9 + / = remain (StdEncoding alphabet).
 func stripBase64(s string) string {
+	s = strings.ReplaceAll(s, `\r\n`, "")
+	s = strings.ReplaceAll(s, `\n`, "")
+	s = strings.ReplaceAll(s, `\r`, "")
+	s = strings.Trim(s, " \t\r\n\"'")
 	var b strings.Builder
 	b.Grow(len(s))
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		switch c {
-		case ' ', '\t', '\n', '\r':
-			continue
-		default:
+		switch {
+		case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9',
+			c == '+', c == '/', c == '=':
 			b.WriteByte(c)
 		}
 	}
