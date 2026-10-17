@@ -22,6 +22,19 @@ func TestUnitStripBase64RemovesWhitespace(t *testing.T) {
 	}
 }
 
+func TestUnitStripBase64RemovesLiteralBackslashN(t *testing.T) {
+	// Same shape as Python: cert.replace('\\n', '')
+	in := `YWJj\nZGVm\r\nZ2hp`
+	got := stripBase64(in)
+	if got != "YWJjZGVmZ2hp" {
+		t.Fatalf("got %q", got)
+	}
+	// Corrupt if only real newlines stripped: backslash dropped, lone 'n' kept.
+	if stripBase64(`ab\ncd`) != "abcd" {
+		t.Fatalf("literal \\n must remove both chars, got %q", stripBase64(`ab\ncd`))
+	}
+}
+
 func TestUnitIsPEM(t *testing.T) {
 	if !isPEM([]byte("-----BEGIN CERTIFICATE-----\nMIIB\n")) {
 		t.Fatal("expected PEM")
