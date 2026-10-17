@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/barloc/dbt-esync/app/source"
 )
 
 // Config is the full dbt-esync YAML schema.
@@ -228,7 +226,24 @@ func validateSourceEntry(i int, e *SourceEntry, seen map[string]struct{}) error 
 	case "mysql":
 		return requireSQLCatalog(prefix+".mysql", e.MySQL)
 	case "growthbook":
-		return requireHostBlock(prefix+".growthbook", e.GrowthBook == nil, func() string { return e.GrowthBook.Host })
+		return validateGrowthBook(prefix+".growthbook", e.GrowthBook)
+	}
+	return nil
+}
+
+func validateGrowthBook(block string, gb *GrowthBookConfig) error {
+	if gb == nil {
+		return fmt.Errorf("config: %s is required when source.type matches", block)
+	}
+	switch {
+	case gb.Host == "":
+		return fmt.Errorf("config: %s.host is required", block)
+	case gb.APIKey == "":
+		return fmt.Errorf("config: %s.api_key is required", block)
+	case gb.FilterSource == "":
+		return fmt.Errorf("config: %s.filter_source is required", block)
+	case gb.ExposureURL == "":
+		return fmt.Errorf("config: %s.exposure_url is required", block)
 	}
 	return nil
 }
@@ -298,8 +313,19 @@ func requireHostBlock(block string, missing bool, host func() string) error {
 	return nil
 }
 
+// KnownSourceTypes is the single source of truth for source[].type values.
+// app/source.KnownTypes aliases this (config cannot import source).
+var KnownSourceTypes = []string{
+	"growthbook",
+	"mysql",
+	"redash",
+	"hive",
+	"gitscan",
+	"qlik",
+}
+
 func knownSourceType(typ string) bool {
-	for _, k := range source.KnownTypes {
+	for _, k := range KnownSourceTypes {
 		if k == typ {
 			return true
 		}

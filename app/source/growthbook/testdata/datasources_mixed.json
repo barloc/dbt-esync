@@ -1,0 +1,33 @@
+{
+  "count": 2,
+  "dataSources": [
+    {
+      "id": "ds_sr",
+      "type": "starrocks",
+      "assignmentQueries": [
+        {
+          "id": "q1",
+          "name": "orders",
+          "description": "orders query",
+          "sql": "SELECT *\nFROM marts.orders_day"
+        },
+        {
+          "id": "q_empty",
+          "name": "noop",
+          "sql": "SELECT 1"
+        }
+      ]
+    },
+    {
+      "id": "ds_bq",
+      "type": "bigquery",
+      "assignmentQueries": [
+        {
+          "id": "q_bq",
+          "name": "ignored",
+          "sql": "SELECT * FROM marts.orders_day"
+        }
+      ]
+    }
+  ]
+}

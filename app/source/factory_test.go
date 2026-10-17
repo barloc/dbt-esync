@@ -3,20 +3,25 @@ package source_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/barloc/dbt-esync/app/config"
 	"github.com/barloc/dbt-esync/app/manifest"
 	"github.com/barloc/dbt-esync/app/source"
 )
 
-func TestUnitNewKnownTypes(t *testing.T) {
+func TestUnitNewStubsNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	for _, typ := range source.KnownTypes {
+		if typ == "growthbook" {
+			continue
+		}
 		t.Run(typ, func(t *testing.T) {
 			t.Parallel()
 
-			src, err := source.New(typ)
+			src, err := source.New(config.SourceEntry{Name: "pkg", Type: typ}, source.Deps{})
 			if err != nil {
 				t.Fatalf("New(%q): %v", typ, err)
 			}
@@ -28,10 +33,19 @@ func TestUnitNewKnownTypes(t *testing.T) {
 	}
 }
 
+func TestUnitNewGrowthBookRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "growthbook"}, source.Deps{})
+	if err == nil || !strings.Contains(err.Error(), "growthbook config") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestUnitNewUnknownType(t *testing.T) {
 	t.Parallel()
 
-	_, err := source.New("nope")
+	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "nope"}, source.Deps{})
 	if err == nil {
 		t.Fatal("expected error for unknown type")
 	}

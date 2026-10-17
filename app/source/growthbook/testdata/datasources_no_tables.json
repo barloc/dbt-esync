@@ -1,0 +1,16 @@
+{
+  "count": 1,
+  "dataSources": [
+    {
+      "id": "ds1",
+      "type": "starrocks",
+      "assignmentQueries": [
+        {
+          "id": "q_empty",
+          "name": "noop",
+          "sql": "SELECT 1"
+        }
+      ]
+    }
+  ]
+}

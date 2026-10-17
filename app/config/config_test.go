@@ -179,6 +179,47 @@ func TestUnitValidateRequiresSourceBlock(t *testing.T) {
 	}
 }
 
+func TestUnitValidateGrowthBookFields(t *testing.T) {
+	t.Parallel()
+
+	base := func(gb *config.GrowthBookConfig) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "growthbook", GrowthBook: gb}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	full := &config.GrowthBookConfig{
+		Host:         "https://gb.example.com/api/v1/data-sources",
+		APIKey:       "k",
+		FilterSource: "starrocks",
+		ExposureURL:  "https://gb.example.com/datasources",
+	}
+	if err := base(full).Validate(); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "growthbook is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+	cases := []struct {
+		mut  func(*config.GrowthBookConfig)
+		want string
+	}{
+		{func(g *config.GrowthBookConfig) { g.Host = "" }, "host is required"},
+		{func(g *config.GrowthBookConfig) { g.APIKey = "" }, "api_key is required"},
+		{func(g *config.GrowthBookConfig) { g.FilterSource = "" }, "filter_source is required"},
+		{func(g *config.GrowthBookConfig) { g.ExposureURL = "" }, "exposure_url is required"},
+	}
+	for _, tc := range cases {
+		g := *full
+		tc.mut(&g)
+		err := base(&g).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+}
+
 func TestUnitValidateRequiresSinkGit(t *testing.T) {
 	t.Parallel()
 

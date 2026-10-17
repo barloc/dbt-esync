@@ -1,0 +1,15 @@
+{
+  "count": 2,
+  "dataSources": [
+    {
+      "id": "ds1",
+      "type": "starrocks",
+      "assignmentQueries": [
+        {
+          "id": "q1",
+          "sql": "SELECT * FROM marts.orders_day"
+        }
+      ]
+    }
+  ]
+}
