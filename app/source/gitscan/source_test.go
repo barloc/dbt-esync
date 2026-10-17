@@ -62,6 +62,27 @@ func TestUnitCollectFilterName(t *testing.T) {
 	}
 }
 
+func TestUnitCollectSkipsMissingDirs(t *testing.T) {
+	t.Parallel()
+
+	cfg := validCfg(t)
+	cfg.Dirs = []string{"appsflyer", "analytics"} // appsflyer absent in fixture
+	src := gitscan.New(cfg, gitscan.Options{
+		Owner:      config.DefaultOwner{Name: "analytics", Email: "@a"},
+		Parse:      parse.Options{ExcludedCatalogs: []string{"main"}},
+		FilterName: "starrocks",
+		Clone:      fixedRoot{root: fixtureRoot(t)},
+	})
+
+	files, err := src.Collect(context.Background(), loadFinder(t))
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("files: %+v", files)
+	}
+}
+
 func TestUnitCollectSkipNoTables(t *testing.T) {
 	t.Parallel()
 

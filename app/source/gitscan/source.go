@@ -83,6 +83,14 @@ func (s *Source) Collect(ctx context.Context, m *manifest.Finder) ([]exposure.Fi
 
 	roots := scanRoots(root, s.cfg.Dirs)
 	for _, walkRoot := range roots {
+		// Match Python Scanner: missing dirs are skipped, not fatal
+		// (md/scripts layout may omit some configured folders).
+		if _, err := os.Stat(walkRoot); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("gitscan: stat %s: %w", walkRoot, err)
+		}
 		err := filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
