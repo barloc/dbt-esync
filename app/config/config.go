@@ -136,6 +136,10 @@ type GitSink struct {
 	ExposuresPath string `yaml:"exposures_path"`
 	Branch        string `yaml:"branch"`
 	BaseBranch    string `yaml:"base_branch"`
+	// CommitName / CommitEmail override the default commit author (dbt-esync@localhost).
+	// Corp GitLab push rules often require a real company email.
+	CommitName  string `yaml:"commit_name"`
+	CommitEmail string `yaml:"commit_email"`
 }
 
 // MRSink opens a GitLab MR or Bitbucket PR after push.
