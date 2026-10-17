@@ -3,6 +3,8 @@ include makefile.env
 IMAGE ?= barloc/dbt-esync
 VERSION ?= latest
 CONFIG ?= config.example.yaml
+# K8s nodes are amd64; local Mac is often arm64 — always publish both.
+PLATFORMS ?= linux/amd64,linux/arm64
 
 .PHONY: test build run lint docker-build docker-push
 
@@ -23,8 +25,11 @@ lint:
 	fi
 
 docker-build:
-	docker build -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+	docker buildx build --load --platform linux/amd64 \
+		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
 
-docker-push: docker-build
-	docker push $(IMAGE):$(VERSION)
-	@if [ "$(VERSION)" != "latest" ]; then docker push $(IMAGE):latest; fi
+# Multi-arch push (amd64 for K8s + arm64 for Apple Silicon).
+docker-push:
+	docker buildx build --platform $(PLATFORMS) --push \
+		-t $(IMAGE):$(VERSION) -t $(IMAGE):latest \
+		.
