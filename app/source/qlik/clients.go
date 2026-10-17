@@ -194,9 +194,8 @@ func (c *defaultClients) AppTags(ctx context.Context, appID string) ([]parse.Tag
 	return out, nil
 }
 
-// normalizeEngineHost turns a Sense Engine host into host:port for wss dial.
-// Accepts bare hostname, host:port, or a full URL (https/wss://host/…).
-func normalizeEngineHost(host string) string {
+// hostnameOnly strips scheme, path, and port from a host/URL.
+func hostnameOnly(host string) string {
 	host = strings.TrimSpace(host)
 	lower := strings.ToLower(host)
 	for _, p := range []string{"wss://", "ws://", "https://", "http://"} {
@@ -208,21 +207,25 @@ func normalizeEngineHost(host string) string {
 	if i := strings.IndexAny(host, "/?"); i >= 0 {
 		host = host[:i]
 	}
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return host
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		// Drop port (QRS is often :4242 — not Engine).
+		host = host[:i]
 	}
-	// Bare hostname → Engine default port. host:port left as-is.
-	if !strings.Contains(host, ":") {
-		return host + ":4747"
+	return strings.TrimSpace(host)
+}
+
+// normalizeEngineHost returns host:4747 for Engine mTLS dial.
+// QRS URLs like https://qlik.example:4242 must not keep :4242 (bad handshake).
+func normalizeEngineHost(host string) string {
+	name := hostnameOnly(host)
+	if name == "" {
+		return ""
 	}
-	return host
+	return name + ":4747"
 }
 
 // engineDialHost picks the host for Engine mTLS.
-// Corp Python uses a proxy wss URL (ticket on :443); Go dials Engine with the
-// QRC client cert on :4747. Prefer qrc.host when set — same Sense node as QRS
-// and matching TLS material. Fall back to qlik.host.
+// Prefer qrc.host (same Sense node + cert as QRS); always dial Engine :4747.
 func engineDialHost(cfg config.QlikConfig) string {
 	if cfg.QRC.Host != "" {
 		return normalizeEngineHost(cfg.QRC.Host)

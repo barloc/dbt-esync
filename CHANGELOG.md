@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5] — 2026-10-18
+
+### Fixed
+
+- Qlik Engine dial always uses `:4747` (strip QRS `:4242` from `qrc.host` URL) — was `wss://…:4242/app/` → bad handshake
+- Skip apps with empty stream (unpublished; matches Python `published` filter)
+
 ## [1.0.4] — 2026-10-18
 
 ### Fixed
