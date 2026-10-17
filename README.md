@@ -8,7 +8,7 @@ Go CLI / CronJob with YAML `--config`. One config = N named sources + one sink.
 
 ## Status
 
-Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. **MySQL SQL catalog (S2):** `app/source/mysql`. Remaining source stubs return `not implemented` (S3–S6).
+Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. **MySQL SQL catalog (S2):** `app/source/mysql`. **Redash (S3):** `app/source/redash`. Remaining source stubs return `not implemented` (S4–S6).
 
 ## Build & run
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; MySQL Collects from a SQL catalog table/query; other source types still return `not implemented`. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
+Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; MySQL Collects from a SQL catalog table/query; Redash Collects dashboards/alerts via REST; other source types still return `not implemented`. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
 
 ```bash
 make test
@@ -100,7 +100,7 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 |--------|---------|--------|
 | `growthbook` | `app/source/growthbook` | implemented |
 | `mysql` | `app/source/mysql` | implemented |
-| `redash` | `app/source/redash` | stub |
+| `redash` | `app/source/redash` | implemented |
 | `hive` | `app/source/hive` | stub |
 | `gitscan` | `app/source/gitscan` | stub |
 | `qlik` | `app/source/qlik` | stub |
@@ -128,9 +128,10 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 |--------|------------------|
 | `host` | Redash API host |
 | `api_key` | API key |
-| `datasource_name_contains` | Substring match on datasource name |
-| `entity_types` | `dashboard` and/or `alerts` |
-| `host_to_display` | URL written into exposures |
+| `datasource_name_contains` | Substring match on datasource name (required) |
+| `entity_types` | `dashboard` and/or `alerts`; empty = both |
+| `host_to_display` | URL written into exposures (empty → `host`) |
+| `use_api_owner` | `true` → owner from Redash `user`; `false` (default) → `default_owner`; empty API fields fall back per-field |
 
 #### Gitscan (`gitscan` block)
 

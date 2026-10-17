@@ -15,7 +15,7 @@ func TestUnitNewStubsNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	for _, typ := range source.KnownTypes {
-		if typ == "growthbook" || typ == "mysql" {
+		if typ == "growthbook" || typ == "mysql" || typ == "redash" {
 			continue
 		}
 		t.Run(typ, func(t *testing.T) {
@@ -47,6 +47,15 @@ func TestUnitNewMySQLRequiresConfig(t *testing.T) {
 
 	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "mysql"}, source.Deps{})
 	if err == nil || !strings.Contains(err.Error(), "mysql config") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitNewRedashRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "redash"}, source.Deps{})
+	if err == nil || !strings.Contains(err.Error(), "redash config") {
 		t.Fatalf("got %v", err)
 	}
 }

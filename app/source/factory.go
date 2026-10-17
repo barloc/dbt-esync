@@ -36,7 +36,15 @@ func New(e config.SourceEntry, deps Deps) (Source, error) {
 			Parse: deps.Parse,
 		}), nil
 	case "redash":
-		return redash.New(), nil
+		if e.Redash == nil {
+			return nil, fmt.Errorf("redash config is required")
+		}
+		return redash.New(*e.Redash, redash.Options{
+			PackageName: e.Name,
+			Owner:       deps.Owner,
+			Parse:       deps.Parse,
+			HTTPClient:  deps.HTTPClient,
+		}), nil
 	case "hive":
 		return hive.New(), nil
 	case "gitscan":
