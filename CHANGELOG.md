@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1] — 2026-10-17
+
+### Fixed
+
+- Qlik `qrc.cert_b64`: strip whitespace in base64; accept legacy PEM cert + PEM key (Python `QRCConnector` shape) as well as PKCS#12
+- Optional `sink.git.commit_name` / `commit_email` for GitLab push rules that reject `@localhost` authors
+
+### Changed
+
+- `make docker-push` publishes multi-arch images (`linux/amd64` + `linux/arm64`) via buildx
+
 ## [1.0.0] — 2026-10-17
 
 First public release.
