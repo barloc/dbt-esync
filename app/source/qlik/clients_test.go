@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/barloc/dbt-esync/app/config"
 )
 
 func TestUnitStripBase64RemovesWhitespace(t *testing.T) {
@@ -68,41 +67,41 @@ func TestUnitTLSFromClientMaterialPEM(t *testing.T) {
 	}
 }
 
-func TestUnitNormalizeEngineHost(t *testing.T) {
+func TestUnitProxyAppBase(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		in, want string
 	}{
-		{"qlik.example.com", "qlik.example.com:4747"},
-		{"qlik.example.com:4747", "qlik.example.com:4747"},
-		{"wss://qlik.example.com/app/", "qlik.example.com:4747"},
-		{"wss://qlik.example.com:443/app/", "qlik.example.com:4747"},
-		{"https://qlik.example.com:4242", "qlik.example.com:4747"},
-		{"https://qlik.example.com/", "qlik.example.com:4747"},
-		{"  WSS://Qlik.Example.Com/app/  ", "Qlik.Example.Com:4747"},
+		{"wss://qlik.example.com/app/", "wss://qlik.example.com/app/"},
+		{"wss://qlik.example.com/app", "wss://qlik.example.com/app/"},
+		{"qlik.example.com", "wss://qlik.example.com/app/"},
+		{"wss://qlik.example.com/", "wss://qlik.example.com/app/"},
 	}
 	for _, tc := range cases {
-		got := normalizeEngineHost(tc.in)
+		got := proxyAppBase(tc.in)
 		if got != tc.want {
-			t.Fatalf("normalizeEngineHost(%q)=%q want %q", tc.in, got, tc.want)
+			t.Fatalf("proxyAppBase(%q)=%q want %q", tc.in, got, tc.want)
 		}
 	}
 }
 
-func TestUnitEngineDialHostPrefersQRC(t *testing.T) {
+func TestUnitFormsUsername(t *testing.T) {
 	t.Parallel()
-	cfg := config.QlikConfig{
-		Host: "wss://proxy.example.com/app/",
-		QRC:  config.QRCConfig{Host: "https://qlik.space307.tech:4242"},
+	if got := formsUsername(`DOMAIN+user`); got != `DOMAIN\user` {
+		t.Fatalf("got %q", got)
 	}
-	got := engineDialHost(cfg)
-	if got != "qlik.space307.tech:4747" {
-		t.Fatalf("got %q want qlik.space307.tech:4747", got)
+	if got := formsUsername(`DOMAIN\user`); got != `DOMAIN\user` {
+		t.Fatalf("got %q", got)
 	}
-	cfg.QRC.Host = ""
-	got = engineDialHost(cfg)
-	if got != "proxy.example.com:4747" {
-		t.Fatalf("fallback got %q", got)
+}
+
+func TestUnitTicketFromHTTP(t *testing.T) {
+	t.Parallel()
+	if got := ticketFromHTTP("https://qlik.example/?qlikTicket=abc&x=1", ""); got != "abc" {
+		t.Fatalf("got %q", got)
+	}
+	if got := ticketFromHTTP("", "https://qlik.example/app/?qlikTicket=xyz"); got != "xyz" {
+		t.Fatalf("got %q", got)
 	}
 }
 

@@ -122,7 +122,7 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 | `redash` | `app/source/redash` | Redash dashboards and alerts via REST |
 | `hive` | `app/source/hive` | SQL catalog in Hive (`SELECT` script texts + owners) |
 | `gitscan` | `app/source/gitscan` | Read-only clone of a repo; scan files under `dirs` / `extensions` |
-| `qlik` | `app/source/qlik` | Qlik Sense Enterprise apps: QRS list + Engine load scripts |
+| `qlik` | `app/source/qlik` | Qlik Sense Enterprise apps: QRS list + WSS proxy load scripts |
 
 #### GrowthBook (`growthbook` block)
 
@@ -205,18 +205,18 @@ Clones a source repo read-only and scans files under configured directories and 
 
 #### Qlik Sense (`qlik` block)
 
-Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS, reads load scripts via the Engine (mTLS), optionally resolves tags/maturity via QRC.
+Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS (client cert), reads load scripts via the proxy ticket + WSS path (same as Python `QlikConnect`), optionally resolves tags/maturity via QRS.
 
 | Option | Filter / meaning |
 |--------|------------------|
-| `host` | Engine host fallback (default port `4747`). Not the Python proxy `wss://…` ticket URL |
-| `user` | Fallback identity `DIRECTORY\userid` when `qrc.user_*` empty |
-| `password` | Reserved (unused by default client; auth is client cert) |
+| `host` | WSS proxy URL for scripts (e.g. `wss://qlik.example/app/`) — forms ticket auth |
+| `user` | Forms login (`DIRECTORY\userid` or `DIRECTORY+userid`); also QRS identity fallback |
+| `password` | Forms password for proxy ticket |
 | `datasource` | `LIB CONNECT TO` warehouse slice of the load script |
 | `stream_include` | Allowlist of **Qlik streams** (not app names); empty = no allowlist |
 | `stream_exclude` | Blocklist of Qlik streams |
 | `exposure_url_template` | Dashboard URL (`{{.AppID}}`, …) |
-| `qrc.host` | QRS/QRC host (**required** for default client: app list + tags). Also used for Engine mTLS dial when set |
+| `qrc.host` | QRS HTTPS host (**required**: app list + tags), e.g. `https://qlik.example:4242` |
 | `qrc.cert_b64` | Client material (base64; whitespace OK): PKCS#12 **or** PEM certificate |
 | `qrc.password` | PKCS#12 passphrase, **or** base64 PEM private key (legacy Python shape) |
 | `qrc.user_directory` | `X-Qlik-User` directory |
@@ -251,7 +251,7 @@ All sources are **read-only**. Only the sink writes.
 | **redash** | API key | list/read dashboards, alerts, data_sources, queries | SQL of widgets/alerts (**no** execute) |
 | **hive** | Hive LDAP | `SELECT` on scripts table (+ owners) | script texts |
 | **gitscan** | git clone token | **read** clone of source repo | files under `dirs` / `extensions` |
-| **qlik** | QRC PKCS#12 or PEM cert+key + `X-Qlik-User` (Engine + QRS) | Qlik Sense Enterprise: streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
+| **qlik** | WSS forms user/password + QRC PKCS#12/PEM cert + `X-Qlik-User` | Qlik Sense Enterprise: streams via QRS; **read load script** via proxy ticket/WSS; tags via QRS | scripts + tags |
 | **sink.git** | bot + token | **write** target dbt repo (push branch) | — |
 | **sink.mr** | same or separate token | create MR/PR on `base_branch` | — |
 | **manifest** | HTTP(S) or file | read URL / file | dbt manifest |

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/qlik-oss/enigma-go/v4"
@@ -19,17 +20,24 @@ import (
 	"github.com/barloc/dbt-esync/app/parse"
 )
 
-// defaultClients implements Catalog, ScriptFetcher, and TagFetcher via QRS + Engine.
+// defaultClients implements Catalog, ScriptFetcher, and TagFetcher via QRS + WSS proxy.
 type defaultClients struct {
 	cfg        config.QlikConfig
 	httpClient *http.Client
+	plainHTTP  *http.Client
 	tlsConfig  *tls.Config
 	qlikUser   string
+
+	mu     sync.Mutex
+	cookie string // proxy session; ticket is one-shot and discarded after cookie mint
 }
 
 func newDefaultClients(cfg config.QlikConfig, httpClient *http.Client) (*defaultClients, error) {
 	if cfg.QRC.Host == "" || cfg.QRC.CertB64 == "" {
 		return nil, fmt.Errorf("qlik: default client requires qrc.host and qrc.cert_b64 (or inject Catalog/Scripts)")
+	}
+	if strings.TrimSpace(cfg.Host) == "" || strings.TrimSpace(cfg.User) == "" || cfg.Password == "" {
+		return nil, fmt.Errorf("qlik: host, user, and password are required for WSS proxy ticket auth")
 	}
 	tlsCfg, err := tlsFromClientMaterial(cfg.QRC.CertB64, cfg.QRC.Password)
 	if err != nil {
@@ -62,6 +70,7 @@ func newDefaultClients(cfg config.QlikConfig, httpClient *http.Client) (*default
 	return &defaultClients{
 		cfg:        cfg,
 		httpClient: httpClient,
+		plainHTTP:  newPlainHTTP(),
 		tlsConfig:  tlsCfg,
 		qlikUser:   fmt.Sprintf("UserDirectory=%s; UserId=%s", dir, uid),
 	}, nil
@@ -194,45 +203,6 @@ func (c *defaultClients) AppTags(ctx context.Context, appID string) ([]parse.Tag
 	return out, nil
 }
 
-// hostnameOnly strips scheme, path, and port from a host/URL.
-func hostnameOnly(host string) string {
-	host = strings.TrimSpace(host)
-	lower := strings.ToLower(host)
-	for _, p := range []string{"wss://", "ws://", "https://", "http://"} {
-		if strings.HasPrefix(lower, p) {
-			host = host[len(p):]
-			break
-		}
-	}
-	if i := strings.IndexAny(host, "/?"); i >= 0 {
-		host = host[:i]
-	}
-	if i := strings.LastIndex(host, ":"); i >= 0 {
-		// Drop port (QRS is often :4242 — not Engine).
-		host = host[:i]
-	}
-	return strings.TrimSpace(host)
-}
-
-// normalizeEngineHost returns host:4747 for Engine mTLS dial.
-// QRS URLs like https://qlik.example:4242 must not keep :4242 (bad handshake).
-func normalizeEngineHost(host string) string {
-	name := hostnameOnly(host)
-	if name == "" {
-		return ""
-	}
-	return name + ":4747"
-}
-
-// engineDialHost picks the host for Engine mTLS.
-// Prefer qrc.host (same Sense node + cert as QRS); always dial Engine :4747.
-func engineDialHost(cfg config.QlikConfig) string {
-	if cfg.QRC.Host != "" {
-		return normalizeEngineHost(cfg.QRC.Host)
-	}
-	return normalizeEngineHost(cfg.Host)
-}
-
 func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error) {
 	xrf := "0123456789abcdef"
 	u := strings.TrimRight(c.cfg.QRC.Host, "/")
@@ -260,20 +230,37 @@ func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error
 	return body, nil
 }
 
+// LoadScript opens the app via WSS proxy + session cookie (Python QlikConnect).
+// Ticket is minted once; each app uses a fresh engineData socket with the cookie
+// (Sense: one OpenDoc per websocket).
 func (c *defaultClients) LoadScript(ctx context.Context, appID string) (string, error) {
-	engineURL := "wss://" + engineDialHost(c.cfg) + "/app/"
-	slog.Info("qlik engine dial", "url", engineURL, "app_id", appID)
+	if err := c.ensureProxyAuth(ctx); err != nil {
+		return "", err
+	}
+	c.mu.Lock()
+	cookie := c.cookie
+	c.mu.Unlock()
+
+	base := proxyAppBase(c.cfg.Host)
+	engineURL := base + "engineData"
+	slog.Info("qlik wss dial", "url", engineURL, "app_id", appID)
 
 	headers := http.Header{}
-	headers.Set("X-Qlik-User", c.qlikUser)
+	headers.Set("Cookie", cookie)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	dialer := enigma.Dialer{TLSClientConfig: c.tlsConfig}
+	// Proxy path: no client cert — session cookie only (Python websocket + cookie).
+	dialer := enigma.Dialer{
+		TLSClientConfig: &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //nolint:gosec
+		},
+	}
 	global, err := dialer.Dial(dialCtx, engineURL, headers)
 	if err != nil {
-		return "", fmt.Errorf("qlik: engine dial %s: %w", engineURL, err)
+		return "", fmt.Errorf("qlik: wss dial %s: %w", engineURL, err)
 	}
 	defer global.DisconnectFromServer()
 
