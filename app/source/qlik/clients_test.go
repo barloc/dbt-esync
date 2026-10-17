@@ -76,7 +76,8 @@ func TestUnitNormalizeEngineHost(t *testing.T) {
 		{"qlik.example.com", "qlik.example.com:4747"},
 		{"qlik.example.com:4747", "qlik.example.com:4747"},
 		{"wss://qlik.example.com/app/", "qlik.example.com:4747"},
-		{"wss://qlik.example.com:443/app/", "qlik.example.com:443"},
+		{"wss://qlik.example.com:443/app/", "qlik.example.com:4747"},
+		{"https://qlik.example.com:4242", "qlik.example.com:4747"},
 		{"https://qlik.example.com/", "qlik.example.com:4747"},
 		{"  WSS://Qlik.Example.Com/app/  ", "Qlik.Example.Com:4747"},
 	}
@@ -92,11 +93,11 @@ func TestUnitEngineDialHostPrefersQRC(t *testing.T) {
 	t.Parallel()
 	cfg := config.QlikConfig{
 		Host: "wss://proxy.example.com/app/",
-		QRC:  config.QRCConfig{Host: "https://sense.example.com/"},
+		QRC:  config.QRCConfig{Host: "https://qlik.space307.tech:4242"},
 	}
 	got := engineDialHost(cfg)
-	if got != "sense.example.com:4747" {
-		t.Fatalf("got %q", got)
+	if got != "qlik.space307.tech:4747" {
+		t.Fatalf("got %q want qlik.space307.tech:4747", got)
 	}
 	cfg.QRC.Host = ""
 	got = engineDialHost(cfg)

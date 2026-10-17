@@ -99,7 +99,8 @@ func (s *Source) Collect(ctx context.Context, m *manifest.Finder) ([]exposure.Fi
 	var exposures []exposure.Exposure
 	skippedStream, skippedEmpty, skippedNoTables := 0, 0, 0
 	for i, app := range apps {
-		if !streamAllowed(app.Stream, s.cfg.StreamInclude, s.cfg.StreamExclude) {
+		// Unpublished apps have no stream (Python skips !published).
+		if app.Stream == "" || !streamAllowed(app.Stream, s.cfg.StreamInclude, s.cfg.StreamExclude) {
 			skippedStream++
 			continue
 		}
