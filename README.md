@@ -8,7 +8,7 @@ Go CLI / CronJob with YAML `--config`. One config = N named sources + one sink.
 
 ## Status
 
-Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. **MySQL SQL catalog (S2):** `app/source/mysql`. **Redash (S3):** `app/source/redash`. Remaining source stubs return `not implemented` (S4–S6).
+Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. **MySQL SQL catalog (S2):** `app/source/mysql`. **Redash (S3):** `app/source/redash`. **Hive SQL catalog (S4):** `app/source/hive`. **Gitscan (S5):** `app/source/gitscan`. **Qlik (S6):** `app/source/qlik`.
 
 ## Build & run
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; MySQL Collects from a SQL catalog table/query; Redash Collects dashboards/alerts via REST; other source types still return `not implemented`. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
+Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; MySQL and Hive Collect from a SQL catalog table/query (driver = `type` only); Redash Collects dashboards/alerts via REST; Gitscan clones a repo and scans files under `dirs`/`extensions` (filtered by `path_db_tokens` × `manifest.filter_name`); Qlik lists apps via QRS, reads load scripts via Engine (`FilterQlikScript` → tables), optional QRC tags/maturity. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
 
 ```bash
 make test
@@ -101,26 +101,26 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 | `growthbook` | `app/source/growthbook` | implemented |
 | `mysql` | `app/source/mysql` | implemented |
 | `redash` | `app/source/redash` | implemented |
-| `hive` | `app/source/hive` | stub |
-| `gitscan` | `app/source/gitscan` | stub |
-| `qlik` | `app/source/qlik` | stub |
+| `hive` | `app/source/hive` | implemented |
+| `gitscan` | `app/source/gitscan` | implemented |
+| `qlik` | `app/source/qlik` | implemented |
 
 #### Qlik (`qlik` block)
 
 | Option | Filter / meaning |
 |--------|------------------|
-| `host` | Sense Engine host |
-| `user` | Sense user |
-| `password` | Sense password |
+| `host` | Sense Engine host (default port `4747` if omitted) |
+| `user` | Fallback identity `DIRECTORY\userid` when `qrc.user_*` empty |
+| `password` | Reserved (unused by default client; auth is client cert) |
 | `datasource` | `LIB CONNECT TO` warehouse slice of the load script |
 | `stream_include` | Allowlist of **Qlik streams** (not app names); empty = no allowlist |
 | `stream_exclude` | Blocklist of Qlik streams |
 | `exposure_url_template` | Dashboard URL (`{{.AppID}}`, …) |
-| `qrc.host` | Optional QRS/QRC host for tags/maturity |
-| `qrc.cert_b64` | Client cert (base64) |
-| `qrc.password` | QRC cert/key password |
-| `qrc.user_directory` | QRC identity directory |
-| `qrc.user_id` | QRC identity user |
+| `qrc.host` | QRS/QRC host (**required** for default client: app list + tags) |
+| `qrc.cert_b64` | Client PKCS#12 cert (base64; also used for Engine mTLS) |
+| `qrc.password` | PKCS#12 password |
+| `qrc.user_directory` | `X-Qlik-User` directory |
+| `qrc.user_id` | `X-Qlik-User` user id |
 
 #### Redash (`redash` block)
 
@@ -203,7 +203,7 @@ All sources are **read-only**. Only the sink writes.
 | **redash** | API key | list/read dashboards, alerts, data_sources, queries | SQL of widgets/alerts (**no** execute) |
 | **hive** | Hive LDAP | `SELECT` on scripts table (+ owners) | script texts |
 | **gitscan** | git clone token | **read** clone of source repo | files under `dirs` / `extensions` |
-| **qlik** | Sense user; optional QRC mTLS | streams + **read load script**; QRS read app meta | scripts + tags |
+| **qlik** | QRC PKCS#12 + `X-Qlik-User` (Engine + QRS) | streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
 | **sink.git** | bot + token | **write** target dbt repo (push branch) | — |
 | **sink.mr** | same or separate token | create MR/PR on `base_branch` | — |
 | **manifest** | HTTP(S) or file | read URL / file | dbt manifest |

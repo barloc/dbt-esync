@@ -11,5 +11,6 @@ import (
 type Deps struct {
 	Owner      config.DefaultOwner
 	Parse      parse.Options
+	FilterName string       // manifest.filter_name (gitscan path_db_tokens)
 	HTTPClient *http.Client // nil → http.DefaultClient
 }

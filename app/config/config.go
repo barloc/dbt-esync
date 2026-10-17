@@ -212,16 +212,11 @@ func validateSourceEntry(i int, e *SourceEntry, seen map[string]struct{}) error 
 
 	switch e.Type {
 	case "qlik":
-		return requireHostBlock(prefix+".qlik", e.Qlik == nil, func() string { return e.Qlik.Host })
+		return validateQlik(prefix+".qlik", e.Qlik)
 	case "redash":
 		return validateRedash(prefix+".redash", e.Redash)
 	case "gitscan":
-		if e.Gitscan == nil {
-			return fmt.Errorf("config: %s.gitscan is required when type is gitscan", prefix)
-		}
-		if e.Gitscan.RepoURL == "" {
-			return fmt.Errorf("config: %s.gitscan.repo_url is required", prefix)
-		}
+		return validateGitscan(prefix+".gitscan", e.Gitscan)
 	case "hive":
 		return requireSQLCatalog(prefix+".hive", e.Hive)
 	case "mysql":
@@ -245,6 +240,43 @@ func validateGrowthBook(block string, gb *GrowthBookConfig) error {
 		return fmt.Errorf("config: %s.filter_source is required", block)
 	case gb.ExposureURL == "":
 		return fmt.Errorf("config: %s.exposure_url is required", block)
+	}
+	return nil
+}
+
+func validateQlik(block string, q *QlikConfig) error {
+	if q == nil {
+		return fmt.Errorf("config: %s is required when source.type matches", block)
+	}
+	switch {
+	case q.Host == "":
+		return fmt.Errorf("config: %s.host is required", block)
+	case q.Datasource == "":
+		return fmt.Errorf("config: %s.datasource is required", block)
+	case q.ExposureURLTemplate == "":
+		return fmt.Errorf("config: %s.exposure_url_template is required", block)
+	}
+	return nil
+}
+
+func validateGitscan(block string, g *GitscanConfig) error {
+	if g == nil {
+		return fmt.Errorf("config: %s is required when source.type matches", block)
+	}
+	switch {
+	case g.RepoURL == "":
+		return fmt.Errorf("config: %s.repo_url is required", block)
+	case g.LocalPath == "":
+		return fmt.Errorf("config: %s.local_path is required", block)
+	case len(g.Extensions) == 0:
+		return fmt.Errorf("config: %s.extensions is required", block)
+	}
+	switch strings.ToLower(g.VCS) {
+	case "gitlab", "bitbucket":
+	case "":
+		return fmt.Errorf("config: %s.vcs is required", block)
+	default:
+		return fmt.Errorf("config: %s.vcs: unknown %q (want gitlab or bitbucket)", block, g.VCS)
 	}
 	return nil
 }
@@ -349,16 +381,6 @@ func requireSQLCatalog(block string, cat *SQLCatalog) error {
 		return fmt.Errorf("config: %s.query and %s.table are mutually exclusive", block, block)
 	case !hasQuery && !hasTable:
 		return fmt.Errorf("config: %s.query or %s.table is required", block, block)
-	}
-	return nil
-}
-
-func requireHostBlock(block string, missing bool, host func() string) error {
-	if missing {
-		return fmt.Errorf("config: %s is required when source.type matches", block)
-	}
-	if host() == "" {
-		return fmt.Errorf("config: %s.host is required", block)
 	}
 	return nil
 }

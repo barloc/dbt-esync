@@ -39,8 +39,10 @@ source:
     type: qlik
     qlik:
       host: qlik.example.com
+      datasource: starrocks
       stream_include: ["Prod", "Shared"]
       stream_exclude: ["99-Archive", "92-TMP"]
+      exposure_url_template: "https://qlik.example.com/sense/app/{{.AppID}}"
 `+validSinkYAML()))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -76,7 +78,7 @@ func TestUnitValidateRequiresName(t *testing.T) {
 
 	cfg := &config.Config{
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   []config.SourceEntry{{Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Source:   []config.SourceEntry{{Type: "qlik", Qlik: minimalQlik()}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	err := cfg.Validate()
@@ -91,7 +93,7 @@ func TestUnitValidateRejectsBadPackageName(t *testing.T) {
 	for _, name := range []string{"a/b", `a\b`, ".."} {
 		cfg := &config.Config{
 			Manifest: config.Manifest{File: "m.json"},
-			Source:   []config.SourceEntry{{Name: name, Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+			Source:   []config.SourceEntry{{Name: name, Type: "qlik", Qlik: minimalQlik()}},
 			Sink:     config.Sink{Git: validGitSink()},
 		}
 		err := cfg.Validate()
@@ -104,7 +106,7 @@ func TestUnitValidateRejectsBadPackageName(t *testing.T) {
 func TestUnitValidateRejectsDuplicateName(t *testing.T) {
 	t.Parallel()
 
-	entry := config.SourceEntry{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}
+	entry := config.SourceEntry{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}
 	cfg := &config.Config{
 		Manifest: config.Manifest{File: "m.json"},
 		Source:   []config.SourceEntry{entry, entry},
@@ -149,7 +151,7 @@ func TestUnitValidateManifestExclusive(t *testing.T) {
 
 	both := &config.Config{
 		Manifest: config.Manifest{URL: "https://example/m.json", File: "m.json"},
-		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 		Sink:     config.Sink{Git: validGitSink()},
 	}
 	if err := both.Validate(); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
@@ -157,7 +159,7 @@ func TestUnitValidateManifestExclusive(t *testing.T) {
 	}
 
 	neither := &config.Config{
-		Source: []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Source: []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 		Sink:   config.Sink{Git: validGitSink()},
 	}
 	if err := neither.Validate(); err == nil || !strings.Contains(err.Error(), "manifest.url or manifest.file") {
@@ -268,7 +270,7 @@ func TestUnitValidateRequiresSinkGit(t *testing.T) {
 
 	cfg := &config.Config{
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 	}
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "sink.git.repo_url") {
@@ -283,7 +285,7 @@ func TestUnitValidateRequiresExposuresPath(t *testing.T) {
 	g.ExposuresPath = ""
 	cfg := &config.Config{
 		Manifest: config.Manifest{File: "m.json"},
-		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+		Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 		Sink:     config.Sink{Git: g},
 	}
 	err := cfg.Validate()
@@ -313,7 +315,7 @@ func TestUnitValidateRequiresSinkGitFields(t *testing.T) {
 			tc.mut(&g)
 			cfg := &config.Config{
 				Manifest: config.Manifest{File: "m.json"},
-				Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+				Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 				Sink:     config.Sink{Git: g},
 			}
 			err := cfg.Validate()
@@ -330,7 +332,7 @@ func TestUnitValidateMRWhenEnabled(t *testing.T) {
 	base := func(mr config.MRSink) *config.Config {
 		return &config.Config{
 			Manifest: config.Manifest{File: "m.json"},
-			Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: &config.QlikConfig{Host: "q"}}},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: minimalQlik()}},
 			Sink:     config.Sink{Git: validGitSink(), MR: mr},
 		}
 	}
@@ -412,6 +414,84 @@ func TestUnitValidateSQLCatalogFields(t *testing.T) {
 	}
 }
 
+func TestUnitValidateQlikFields(t *testing.T) {
+	t.Parallel()
+
+	base := func(q *config.QlikConfig) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "qlik", Qlik: q}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	if err := base(minimalQlik()).Validate(); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "qlik is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+	cases := []struct {
+		mut  func(*config.QlikConfig)
+		want string
+	}{
+		{func(q *config.QlikConfig) { q.Host = "" }, "host is required"},
+		{func(q *config.QlikConfig) { q.Datasource = "" }, "datasource is required"},
+		{func(q *config.QlikConfig) { q.ExposureURLTemplate = "" }, "exposure_url_template is required"},
+	}
+	for _, tc := range cases {
+		q := minimalQlik()
+		tc.mut(q)
+		err := base(q).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+}
+
+func TestUnitValidateGitscanFields(t *testing.T) {
+	t.Parallel()
+
+	full := func() *config.GitscanConfig {
+		return &config.GitscanConfig{
+			RepoURL:    "https://git.example.com/org/analytics.git",
+			LocalPath:  "/tmp/source_repo",
+			Extensions: []string{".sql"},
+			VCS:        "gitlab",
+		}
+	}
+	base := func(g *config.GitscanConfig) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "gitscan", Gitscan: g}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	if err := base(full()).Validate(); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "gitscan is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+	cases := []struct {
+		mut  func(*config.GitscanConfig)
+		want string
+	}{
+		{func(g *config.GitscanConfig) { g.RepoURL = "" }, "repo_url is required"},
+		{func(g *config.GitscanConfig) { g.LocalPath = "" }, "local_path is required"},
+		{func(g *config.GitscanConfig) { g.Extensions = nil }, "extensions is required"},
+		{func(g *config.GitscanConfig) { g.VCS = "" }, "vcs is required"},
+		{func(g *config.GitscanConfig) { g.VCS = "github" }, "unknown"},
+	}
+	for _, tc := range cases {
+		g := full()
+		tc.mut(g)
+		err := base(g).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+}
+
 func TestUnitSQLCatalogSharedSchema(t *testing.T) {
 	body := `
 manifest:
@@ -463,6 +543,14 @@ func writeTempYAML(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func minimalQlik() *config.QlikConfig {
+	return &config.QlikConfig{
+		Host:                "q",
+		Datasource:          "starrocks",
+		ExposureURLTemplate: "https://qlik.example.com/sense/app/{{.AppID}}",
+	}
 }
 
 func validGitSink() config.GitSink {
