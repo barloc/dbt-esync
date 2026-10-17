@@ -179,11 +179,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: manifest.url or manifest.file is required")
 	}
 
-	if c.Sink.Git.RepoURL == "" {
-		return fmt.Errorf("config: sink.git.repo_url is required")
+	if c.SavePath == "" {
+		return fmt.Errorf("config: save_path is required")
 	}
-	if c.Sink.Git.ExposuresPath == "" {
-		return fmt.Errorf("config: sink.git.exposures_path is required")
+	if err := c.validateSink(); err != nil {
+		return err
 	}
 
 	switch c.Source.Type {
@@ -204,6 +204,41 @@ func (c *Config) Validate() error {
 		return requireSQLCatalog("source.mysql", c.Source.MySQL)
 	case "growthbook":
 		return requireHostBlock("source.growthbook", c.Source.GrowthBook == nil, func() string { return c.Source.GrowthBook.Host })
+	}
+	return nil
+}
+
+func (c *Config) validateSink() error {
+	g := c.Sink.Git
+	switch {
+	case g.RepoURL == "":
+		return fmt.Errorf("config: sink.git.repo_url is required")
+	case g.ExposuresPath == "":
+		return fmt.Errorf("config: sink.git.exposures_path is required")
+	case g.User == "":
+		return fmt.Errorf("config: sink.git.user is required")
+	case g.Token == "":
+		return fmt.Errorf("config: sink.git.token is required")
+	case g.LocalPath == "":
+		return fmt.Errorf("config: sink.git.local_path is required")
+	case g.Branch == "":
+		return fmt.Errorf("config: sink.git.branch is required")
+	case g.BaseBranch == "":
+		return fmt.Errorf("config: sink.git.base_branch is required")
+	}
+
+	if !c.Sink.MR.Enabled {
+		return nil
+	}
+	switch c.Sink.MR.Provider {
+	case "gitlab", "bitbucket":
+	case "":
+		return fmt.Errorf("config: sink.mr.provider is required when sink.mr.enabled")
+	default:
+		return fmt.Errorf("config: sink.mr.provider must be gitlab or bitbucket")
+	}
+	if c.Sink.MR.Host == "" {
+		return fmt.Errorf("config: sink.mr.host is required when sink.mr.enabled")
 	}
 	return nil
 }
