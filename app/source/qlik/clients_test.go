@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/barloc/dbt-esync/app/config"
 )
 
 func TestUnitStripBase64RemovesWhitespace(t *testing.T) {
@@ -83,6 +85,23 @@ func TestUnitNormalizeEngineHost(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("normalizeEngineHost(%q)=%q want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestUnitEngineDialHostPrefersQRC(t *testing.T) {
+	t.Parallel()
+	cfg := config.QlikConfig{
+		Host: "wss://proxy.example.com/app/",
+		QRC:  config.QRCConfig{Host: "https://sense.example.com/"},
+	}
+	got := engineDialHost(cfg)
+	if got != "sense.example.com:4747" {
+		t.Fatalf("got %q", got)
+	}
+	cfg.QRC.Host = ""
+	got = engineDialHost(cfg)
+	if got != "proxy.example.com:4747" {
+		t.Fatalf("fallback got %q", got)
 	}
 }
 

@@ -209,14 +209,14 @@ Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS, reads lo
 
 | Option | Filter / meaning |
 |--------|------------------|
-| `host` | Sense Engine host (default port `4747` if omitted) |
+| `host` | Engine host fallback (default port `4747`). Not the Python proxy `wss://…` ticket URL |
 | `user` | Fallback identity `DIRECTORY\userid` when `qrc.user_*` empty |
 | `password` | Reserved (unused by default client; auth is client cert) |
 | `datasource` | `LIB CONNECT TO` warehouse slice of the load script |
 | `stream_include` | Allowlist of **Qlik streams** (not app names); empty = no allowlist |
 | `stream_exclude` | Blocklist of Qlik streams |
 | `exposure_url_template` | Dashboard URL (`{{.AppID}}`, …) |
-| `qrc.host` | QRS/QRC host (**required** for default client: app list + tags) |
+| `qrc.host` | QRS/QRC host (**required** for default client: app list + tags). Also used for Engine mTLS dial when set |
 | `qrc.cert_b64` | Client material (base64; whitespace OK): PKCS#12 **or** PEM certificate |
 | `qrc.password` | PKCS#12 passphrase, **or** base64 PEM private key (legacy Python shape) |
 | `qrc.user_directory` | `X-Qlik-User` directory |

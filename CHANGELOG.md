@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.4] — 2026-10-18
+
+### Fixed
+
+- Qlik Engine dial prefers `qrc.host` (same Sense node + cert as QRS) over proxy `wss://` `qlik.host` — corp Python ticket URL is not Engine `:4747`
+
+### Changed
+
+- Structured progress logs on stderr (`log/slog`): config/manifest/collect/sink and per-app Qlik script loads
+
 ## [1.0.3] — 2026-10-18
 
 ### Fixed

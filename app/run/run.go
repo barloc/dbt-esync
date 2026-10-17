@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/barloc/dbt-esync/app/config"
@@ -19,6 +21,9 @@ import (
 // If any Collect fails, successful packages are still synced, then a joined
 // error is returned.
 func Run(configPath string) error {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	slog.Info("load config", "path", configPath)
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -26,12 +31,15 @@ func Run(configPath string) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	slog.Info("config ok", "sources", len(cfg.Source), "sink", cfg.Sink.Git.RepoURL, "exposures_path", cfg.Sink.Git.ExposuresPath)
 
 	ctx := context.Background()
+	slog.Info("load manifest", "url", cfg.Manifest.URL, "file", cfg.Manifest.File, "filter_name", cfg.Manifest.FilterName)
 	finder, err := manifest.Load(ctx, cfg.Manifest.URL, cfg.Manifest.File, cfg.Parse.ExcludedCatalogs)
 	if err != nil {
 		return err
 	}
+	slog.Info("manifest loaded")
 
 	deps := source.Deps{
 		Owner:      cfg.DefaultOwner,
@@ -42,16 +50,21 @@ func Run(configPath string) error {
 		},
 	}
 	packages, collectErrs := collectAll(ctx, finder, cfg.Source, deps)
+	slog.Info("collect finished", "packages", len(packages), "errors", len(collectErrs))
 
 	if len(packages) > 0 {
+		slog.Info("sink sync start", "branch", cfg.Sink.Git.Branch, "packages", packageNames(packages))
 		pushed, err := sinkgit.Sync(ctx, cfg.Sink.Git, cfg.Sink.Git.BaseBranch, packages)
 		if err != nil {
 			return withCollectErrs(collectErrs, err)
 		}
+		slog.Info("sink sync done", "pushed", pushed)
 		if pushed && cfg.Sink.MR.Enabled {
+			slog.Info("open MR/PR", "provider", cfg.Sink.MR.Provider, "host", cfg.Sink.MR.Host)
 			if err := vcs.Open(ctx, cfg.Sink.MR, cfg.Sink.Git, packageNames(packages)); err != nil {
 				return withCollectErrs(collectErrs, err)
 			}
+			slog.Info("MR/PR opened")
 		}
 	}
 
@@ -81,19 +94,28 @@ func collectAll(ctx context.Context, finder *manifest.Finder, entries []config.S
 	var errs []error
 	for i := range entries {
 		e := &entries[i]
+		slog.Info("collect start", "source", e.Name, "type", e.Type, "i", i+1, "of", len(entries))
 		src, err := newSource(*e, deps)
 		if err != nil {
+			slog.Error("collect init failed", "source", e.Name, "type", e.Type, "err", err)
 			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
 			continue
 		}
 		files, err := src.Collect(ctx, finder)
 		if err != nil {
+			slog.Error("collect failed", "source", e.Name, "type", e.Type, "err", err)
 			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
 			continue
 		}
+		nExp := 0
+		for _, f := range files {
+			nExp += len(f.Exposures)
+		}
 		if len(files) == 0 {
+			slog.Info("collect empty", "source", e.Name, "type", e.Type)
 			continue
 		}
+		slog.Info("collect ok", "source", e.Name, "type", e.Type, "files", len(files), "exposures", nExp)
 		packages = append(packages, sinkgit.Package{Name: e.Name, Files: files})
 	}
 	return packages, errs

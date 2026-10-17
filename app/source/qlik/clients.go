@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/qlik-oss/enigma-go/v4"
 	"golang.org/x/crypto/pkcs12"
@@ -193,8 +195,7 @@ func (c *defaultClients) AppTags(ctx context.Context, appID string) ([]parse.Tag
 }
 
 // normalizeEngineHost turns a Sense Engine host into host:port for wss dial.
-// Accepts bare hostname, host:port, or a full Python-style URL
-// (wss://host/app/… from Airflow conn olymp_qlik_sense_wss_*).
+// Accepts bare hostname, host:port, or a full URL (https/wss://host/…).
 func normalizeEngineHost(host string) string {
 	host = strings.TrimSpace(host)
 	lower := strings.ToLower(host)
@@ -216,6 +217,17 @@ func normalizeEngineHost(host string) string {
 		return host + ":4747"
 	}
 	return host
+}
+
+// engineDialHost picks the host for Engine mTLS.
+// Corp Python uses a proxy wss URL (ticket on :443); Go dials Engine with the
+// QRC client cert on :4747. Prefer qrc.host when set — same Sense node as QRS
+// and matching TLS material. Fall back to qlik.host.
+func engineDialHost(cfg config.QlikConfig) string {
+	if cfg.QRC.Host != "" {
+		return normalizeEngineHost(cfg.QRC.Host)
+	}
+	return normalizeEngineHost(cfg.Host)
 }
 
 func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error) {
@@ -246,14 +258,19 @@ func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error
 }
 
 func (c *defaultClients) LoadScript(ctx context.Context, appID string) (string, error) {
-	engineURL := "wss://" + normalizeEngineHost(c.cfg.Host) + "/app/"
+	engineURL := "wss://" + engineDialHost(c.cfg) + "/app/"
+	slog.Info("qlik engine dial", "url", engineURL, "app_id", appID)
+
 	headers := http.Header{}
 	headers.Set("X-Qlik-User", c.qlikUser)
 
+	dialCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
 	dialer := enigma.Dialer{TLSClientConfig: c.tlsConfig}
-	global, err := dialer.Dial(ctx, engineURL, headers)
+	global, err := dialer.Dial(dialCtx, engineURL, headers)
 	if err != nil {
-		return "", fmt.Errorf("qlik: engine dial: %w", err)
+		return "", fmt.Errorf("qlik: engine dial %s: %w", engineURL, err)
 	}
 	defer global.DisconnectFromServer()
 
@@ -265,5 +282,6 @@ func (c *defaultClients) LoadScript(ctx context.Context, appID string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("qlik: get script: %w", err)
 	}
+	slog.Info("qlik script loaded", "app_id", appID, "bytes", len(script))
 	return script, nil
 }
