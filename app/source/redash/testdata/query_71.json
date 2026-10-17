@@ -1,0 +1,5 @@
+{
+  "id": 71,
+  "query": "SELECT * FROM schema_a.missing_table",
+  "data_source_id": 1
+}

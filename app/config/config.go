@@ -80,6 +80,7 @@ type RedashConfig struct {
 	DatasourceNameContains string   `yaml:"datasource_name_contains"`
 	EntityTypes            []string `yaml:"entity_types"`
 	HostToDisplay          string   `yaml:"host_to_display"`
+	UseAPIOwner            bool     `yaml:"use_api_owner"` // false → default_owner; true → Redash user
 }
 
 // GitscanConfig is source[].type: gitscan.
@@ -213,7 +214,7 @@ func validateSourceEntry(i int, e *SourceEntry, seen map[string]struct{}) error 
 	case "qlik":
 		return requireHostBlock(prefix+".qlik", e.Qlik == nil, func() string { return e.Qlik.Host })
 	case "redash":
-		return requireHostBlock(prefix+".redash", e.Redash == nil, func() string { return e.Redash.Host })
+		return validateRedash(prefix+".redash", e.Redash)
 	case "gitscan":
 		if e.Gitscan == nil {
 			return fmt.Errorf("config: %s.gitscan is required when type is gitscan", prefix)
@@ -244,6 +245,33 @@ func validateGrowthBook(block string, gb *GrowthBookConfig) error {
 		return fmt.Errorf("config: %s.filter_source is required", block)
 	case gb.ExposureURL == "":
 		return fmt.Errorf("config: %s.exposure_url is required", block)
+	}
+	return nil
+}
+
+func validateRedash(block string, r *RedashConfig) error {
+	if r == nil {
+		return fmt.Errorf("config: %s is required when source.type matches", block)
+	}
+	switch {
+	case r.Host == "":
+		return fmt.Errorf("config: %s.host is required", block)
+	case r.APIKey == "":
+		return fmt.Errorf("config: %s.api_key is required", block)
+	case r.DatasourceNameContains == "":
+		return fmt.Errorf("config: %s.datasource_name_contains is required", block)
+	}
+	seen := map[string]struct{}{}
+	for _, et := range r.EntityTypes {
+		switch et {
+		case "dashboard", "alerts":
+		default:
+			return fmt.Errorf("config: %s.entity_types: unknown %q (want dashboard or alerts)", block, et)
+		}
+		if _, dup := seen[et]; dup {
+			return fmt.Errorf("config: %s.entity_types: duplicate %q", block, et)
+		}
+		seen[et] = struct{}{}
 	}
 	return nil
 }

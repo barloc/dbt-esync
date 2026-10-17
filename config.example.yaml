@@ -83,6 +83,7 @@ source:
   #     datasource_name_contains: starrocks
   #     entity_types: ["dashboard", "alerts"]
   #     host_to_display: "https://redash.example.com"
+  #     use_api_owner: false
 
   # - name: bi_gitscan
   #   type: gitscan

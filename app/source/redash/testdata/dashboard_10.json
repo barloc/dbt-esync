@@ -1,0 +1,25 @@
+{
+  "id": 10,
+  "name": "Orders Dash",
+  "user": {"name": "Redash Alice", "email": "alice@example.com"},
+  "widgets": [
+    {
+      "visualization": {
+        "query": {
+          "id": 53,
+          "name": "orders_q",
+          "data_source_id": 1
+        }
+      }
+    },
+    {
+      "visualization": {
+        "query": {
+          "id": 54,
+          "name": "orders_q2",
+          "data_source_id": 1
+        }
+      }
+    }
+  ]
+}

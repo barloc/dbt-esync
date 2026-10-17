@@ -1,0 +1,14 @@
+[
+  {
+    "id": 7,
+    "name": "Orders Alert",
+    "user": {"name": "Redash Carol", "email": "carol@example.com"},
+    "query": {"id": 70, "name": "alert_q"}
+  },
+  {
+    "id": 8,
+    "name": "Wrong DS Alert",
+    "user": {"name": "X", "email": "x@example.com"},
+    "query": {"id": 99, "name": "pg_alert"}
+  }
+]

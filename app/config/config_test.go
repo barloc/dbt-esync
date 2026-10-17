@@ -220,6 +220,49 @@ func TestUnitValidateGrowthBookFields(t *testing.T) {
 	}
 }
 
+func TestUnitValidateRedashFields(t *testing.T) {
+	t.Parallel()
+
+	base := func(r *config.RedashConfig) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "redash", Redash: r}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	full := &config.RedashConfig{
+		Host:                   "https://redash.example.com",
+		APIKey:                 "k",
+		DatasourceNameContains: "starrocks",
+		EntityTypes:            []string{"dashboard", "alerts"},
+		HostToDisplay:          "https://redash.example.com",
+	}
+	if err := base(full).Validate(); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "redash is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+	cases := []struct {
+		mut  func(*config.RedashConfig)
+		want string
+	}{
+		{func(r *config.RedashConfig) { r.Host = "" }, "host is required"},
+		{func(r *config.RedashConfig) { r.APIKey = "" }, "api_key is required"},
+		{func(r *config.RedashConfig) { r.DatasourceNameContains = "" }, "datasource_name_contains is required"},
+		{func(r *config.RedashConfig) { r.EntityTypes = []string{"nope"} }, "entity_types: unknown"},
+		{func(r *config.RedashConfig) { r.EntityTypes = []string{"dashboard", "dashboard"} }, "entity_types: duplicate"},
+	}
+	for _, tc := range cases {
+		r := *full
+		tc.mut(&r)
+		err := base(&r).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+}
+
 func TestUnitValidateRequiresSinkGit(t *testing.T) {
 	t.Parallel()
 

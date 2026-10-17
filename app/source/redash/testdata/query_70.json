@@ -1,0 +1,5 @@
+{
+  "id": 70,
+  "query": "SELECT * FROM marts.orders_day",
+  "data_source_id": 1
+}

@@ -1,0 +1,16 @@
+{
+  "id": 11,
+  "name": "No Match DS",
+  "user": {"name": "Bob", "email": "bob@example.com"},
+  "widgets": [
+    {
+      "visualization": {
+        "query": {
+          "id": 99,
+          "name": "pg_q",
+          "data_source_id": 2
+        }
+      }
+    }
+  ]
+}
