@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3] — 2026-10-18
+
+### Fixed
+
+- Qlik engine `host`: accept Python/Airflow `wss://…` URLs (strip scheme/path, default `:4747`) — was dialing hostname `wss`
+- Gitscan: skip missing configured dirs (match Python `os.walk`); missing `appsflyer` etc. no longer fails the source
+
 ## [1.0.2] — 2026-10-18
 
 ### Fixed

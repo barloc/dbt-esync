@@ -192,6 +192,32 @@ func (c *defaultClients) AppTags(ctx context.Context, appID string) ([]parse.Tag
 	return out, nil
 }
 
+// normalizeEngineHost turns a Sense Engine host into host:port for wss dial.
+// Accepts bare hostname, host:port, or a full Python-style URL
+// (wss://host/app/… from Airflow conn olymp_qlik_sense_wss_*).
+func normalizeEngineHost(host string) string {
+	host = strings.TrimSpace(host)
+	lower := strings.ToLower(host)
+	for _, p := range []string{"wss://", "ws://", "https://", "http://"} {
+		if strings.HasPrefix(lower, p) {
+			host = host[len(p):]
+			break
+		}
+	}
+	if i := strings.IndexAny(host, "/?"); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return host
+	}
+	// Bare hostname → Engine default port. host:port left as-is.
+	if !strings.Contains(host, ":") {
+		return host + ":4747"
+	}
+	return host
+}
+
 func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error) {
 	xrf := "0123456789abcdef"
 	u := strings.TrimRight(c.cfg.QRC.Host, "/")
@@ -220,11 +246,7 @@ func (c *defaultClients) qrsGET(ctx context.Context, path string) ([]byte, error
 }
 
 func (c *defaultClients) LoadScript(ctx context.Context, appID string) (string, error) {
-	host := c.cfg.Host
-	if !strings.Contains(host, ":") {
-		host = host + ":4747"
-	}
-	engineURL := "wss://" + host + "/app/"
+	engineURL := "wss://" + normalizeEngineHost(c.cfg.Host) + "/app/"
 	headers := http.Header{}
 	headers.Set("X-Qlik-User", c.qlikUser)
 
