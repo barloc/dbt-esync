@@ -297,8 +297,30 @@ func requireSQLCatalog(block string, cat *SQLCatalog) error {
 	if cat == nil {
 		return fmt.Errorf("config: %s is required when source.type matches", block)
 	}
-	if cat.Host == "" {
+	switch {
+	case cat.Host == "":
 		return fmt.Errorf("config: %s.host is required", block)
+	case cat.User == "":
+		return fmt.Errorf("config: %s.user is required", block)
+	case cat.Database == "":
+		return fmt.Errorf("config: %s.database is required", block)
+	case cat.IDColumn == "":
+		return fmt.Errorf("config: %s.id_column is required", block)
+	case cat.SQLColumn == "":
+		return fmt.Errorf("config: %s.sql_column is required", block)
+	case cat.ExposurePrefix == "":
+		return fmt.Errorf("config: %s.exposure_prefix is required", block)
+	case cat.ExposureURLTemplate == "":
+		return fmt.Errorf("config: %s.exposure_url_template is required", block)
+	}
+
+	hasQuery := cat.Query != ""
+	hasTable := cat.Table != ""
+	switch {
+	case hasQuery && hasTable:
+		return fmt.Errorf("config: %s.query and %s.table are mutually exclusive", block, block)
+	case !hasQuery && !hasTable:
+		return fmt.Errorf("config: %s.query or %s.table is required", block, block)
 	}
 	return nil
 }
