@@ -4,7 +4,7 @@ IMAGE ?= barloc/dbt-esync
 VERSION ?= latest
 CONFIG ?= config.example.yaml
 
-.PHONY: test build run lint docker-build
+.PHONY: test build run lint docker-build docker-push
 
 test:
 	go test ./...
@@ -24,3 +24,7 @@ lint:
 
 docker-build:
 	docker build -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+
+docker-push: docker-build
+	docker push $(IMAGE):$(VERSION)
+	@if [ "$(VERSION)" != "latest" ]; then docker push $(IMAGE):latest; fi

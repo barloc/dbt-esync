@@ -6,11 +6,9 @@ Sync dbt exposures from BI tools and code repos into your dbt project.
 
 Go CLI / CronJob with YAML `--config`. One config = N named sources + one sink.
 
-## Status
-
-Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. **MySQL SQL catalog (S2):** `app/source/mysql`. **Redash (S3):** `app/source/redash`. **Hive SQL catalog (S4):** `app/source/hive`. **Gitscan (S5):** `app/source/gitscan`. **Qlik (S6):** `app/source/qlik`.
-
 ## Build & run
+
+Build the binary and run with the example config:
 
 ```bash
 make build
@@ -19,13 +17,34 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; MySQL and Hive Collect from a SQL catalog table/query (driver = `type` only); Redash Collects dashboards/alerts via REST; Gitscan clones a repo and scans files under `dirs`/`extensions` (filtered by `path_db_tokens` × `manifest.filter_name`); Qlik lists apps via QRS, reads load scripts via Engine (`FilterQlikScript` → tables), optional QRC tags/maturity. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
+What a run does:
+
+1. Load and validate the YAML config (env overrides applied).
+2. Load `manifest.json` (URL or file).
+3. Collect each `source[]` entry (best-effort: one failure does not skip the rest).
+4. Write successful non-empty packages into the sink repo in one commit and optionally open an MR/PR.
+5. Exit non-zero if any Collect failed.
+
+Checks and image:
 
 ```bash
 make test
 make lint
 make docker-build
 ```
+
+## Docker Hub
+
+```bash
+docker pull barloc/dbt-esync:v1.0.0
+docker run --rm barloc/dbt-esync:v1.0.0 --help
+
+docker login
+make docker-push                 # barloc/dbt-esync:latest
+make docker-push VERSION=v1.0.0  # also tags VERSION
+```
+
+Image: [`barloc/dbt-esync`](https://hub.docker.com/r/barloc/dbt-esync).
 
 ## Configuration
 
@@ -57,7 +76,7 @@ export DBT_ESYNC_SINK__MR__ENABLED=false
 export DBT_ESYNC_DEFAULT_OWNER__SLACK="#analytics"
 ```
 
-Corp CronJobs typically mount a base YAML and inject secrets via these env vars (Vault / K8s secrets).
+CronJobs typically mount a base YAML and inject secrets via these env vars (Vault / K8s secrets).
 
 ### Common
 
@@ -96,16 +115,97 @@ Package [`app/parse`](app/parse): `FilterQlikScript` (LIB CONNECT + SUB/CALL), `
 
 Collect runs every entry (best-effort). Successful packages are written in one sink commit; any Collect failure still exits non-zero after sync.
 
-| `type` | Package | Status |
-|--------|---------|--------|
-| `growthbook` | `app/source/growthbook` | implemented |
-| `mysql` | `app/source/mysql` | implemented |
-| `redash` | `app/source/redash` | implemented |
-| `hive` | `app/source/hive` | implemented |
-| `gitscan` | `app/source/gitscan` | implemented |
-| `qlik` | `app/source/qlik` | implemented |
+| `type` | Package | Description |
+|--------|---------|-------------|
+| `growthbook` | `app/source/growthbook` | GrowthBook datasources and assignment SQL via REST |
+| `mysql` | `app/source/mysql` | SQL catalog in MySQL (`SELECT` texts + metadata) |
+| `redash` | `app/source/redash` | Redash dashboards and alerts via REST |
+| `hive` | `app/source/hive` | SQL catalog in Hive (`SELECT` script texts + owners) |
+| `gitscan` | `app/source/gitscan` | Read-only clone of a repo; scan files under `dirs` / `extensions` |
+| `qlik` | `app/source/qlik` | Qlik Sense Enterprise apps: QRS list + Engine load scripts |
 
-#### Qlik (`qlik` block)
+#### GrowthBook (`growthbook` block)
+
+Reads datasources and assignment queries from the GrowthBook API (API host, not the UI).
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `host` | API host (not the UI) |
+| `api_key` | Bearer token |
+| `filter_source` | Datasource type (= `manifest.filter_name`) |
+| `exposure_url` | UI template |
+
+#### MySQL SQL catalog (`mysql` block)
+
+Reads exposure SQL from a catalog table (or custom `query`) over MySQL. Same YAML shape as `hive`; `type` selects the driver only.
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `host` | Server host |
+| `port` | Server port (optional) |
+| `user` | DB user |
+| `password` | DB password |
+| `database` | Database / schema |
+| `query` | Full SELECT (alternative to table + columns) |
+| `table` | Catalog table when not using `query` |
+| `id_column` | Row id column |
+| `sql_column` | SQL / script text column |
+| `description_column` | Optional description column |
+| `extra_filters` | Extra SQL `WHERE` |
+| `exposure_prefix` | Exposure name prefix |
+| `exposure_url_template` | UI link (`{{.ID}}`, …) |
+
+#### Redash (`redash` block)
+
+Lists dashboards and/or alerts, then reads query SQL for matching datasources. Does not execute queries.
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `host` | Redash API host |
+| `api_key` | API key |
+| `datasource_name_contains` | Substring match on datasource name (required) |
+| `entity_types` | `dashboard` and/or `alerts`; empty = both |
+| `host_to_display` | URL written into exposures (empty → `host`) |
+| `use_api_owner` | `true` → owner from Redash `user`; `false` (default) → `default_owner`; empty API fields fall back per-field |
+
+#### Hive SQL catalog (`hive` block)
+
+Same options as MySQL; connects with the Hive driver (typically LDAP). `type: hive` vs `type: mysql` selects the driver only.
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `host` | Server host |
+| `port` | Server port (usually set for Hive) |
+| `user` | DB user |
+| `password` | DB password |
+| `database` | Database / schema |
+| `query` | Full SELECT (alternative to table + columns) |
+| `table` | Catalog table when not using `query` |
+| `id_column` | Row id column |
+| `sql_column` | SQL / script text column |
+| `description_column` | Optional description column |
+| `extra_filters` | Extra SQL `WHERE` |
+| `exposure_prefix` | Exposure name prefix |
+| `exposure_url_template` | UI link (`{{.ID}}`, …) |
+
+#### Gitscan (`gitscan` block)
+
+Clones a source repo read-only and scans files under configured directories and extensions. Path tokens are matched against `manifest.filter_name`.
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `repo_url` | Source repo URL (read-only clone) |
+| `login` | Clone username |
+| `token` | Clone token |
+| `local_path` | Working directory for the clone |
+| `dirs` | Directories to scan |
+| `extensions` | e.g. `.sql`, `.py`, `.php` |
+| `path_db_tokens` | Path tokens matched with `manifest.filter_name` |
+| `vcs` | `gitlab` \| `bitbucket` (browse URL shape) |
+
+#### Qlik Sense (`qlik` block)
+
+Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS, reads load scripts via the Engine (mTLS), optionally resolves tags/maturity via QRC.
 
 | Option | Filter / meaning |
 |--------|------------------|
@@ -121,59 +221,6 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 | `qrc.password` | PKCS#12 password |
 | `qrc.user_directory` | `X-Qlik-User` directory |
 | `qrc.user_id` | `X-Qlik-User` user id |
-
-#### Redash (`redash` block)
-
-| Option | Filter / meaning |
-|--------|------------------|
-| `host` | Redash API host |
-| `api_key` | API key |
-| `datasource_name_contains` | Substring match on datasource name (required) |
-| `entity_types` | `dashboard` and/or `alerts`; empty = both |
-| `host_to_display` | URL written into exposures (empty → `host`) |
-| `use_api_owner` | `true` → owner from Redash `user`; `false` (default) → `default_owner`; empty API fields fall back per-field |
-
-#### Gitscan (`gitscan` block)
-
-| Option | Filter / meaning |
-|--------|------------------|
-| `repo_url` | Source repo URL (read-only clone) |
-| `login` | Clone username |
-| `token` | Clone token |
-| `local_path` | Working directory for the clone |
-| `dirs` | Directories to scan |
-| `extensions` | e.g. `.sql`, `.py`, `.php` |
-| `path_db_tokens` | Path tokens matched with `manifest.filter_name` |
-| `vcs` | `gitlab` \| `bitbucket` (browse URL shape) |
-
-#### Hive / MySQL SQL catalog (`hive` / `mysql` blocks)
-
-Same YAML schema; `type` selects the driver only (`hive` vs `mysql`). MySQL is the ex-Sigma SQL catalog.
-
-| Option | Filter / meaning |
-|--------|------------------|
-| `host` | Server host |
-| `port` | Server port (optional; Hive usually set) |
-| `user` | DB user |
-| `password` | DB password |
-| `database` | Database / schema |
-| `query` | Full SELECT (alternative to table + columns) |
-| `table` | Catalog table when not using `query` |
-| `id_column` | Row id column |
-| `sql_column` | SQL / script text column |
-| `description_column` | Optional description column |
-| `extra_filters` | Extra SQL `WHERE` |
-| `exposure_prefix` | Exposure name prefix |
-| `exposure_url_template` | UI link (`{{.ID}}`, …) |
-
-#### GrowthBook (`growthbook` block)
-
-| Option | Filter / meaning |
-|--------|------------------|
-| `host` | API host (not the UI) |
-| `api_key` | Bearer token |
-| `filter_source` | Datasource type (= `manifest.filter_name`) |
-| `exposure_url` | UI template |
 
 ### Sink
 
@@ -203,29 +250,12 @@ All sources are **read-only**. Only the sink writes.
 | **redash** | API key | list/read dashboards, alerts, data_sources, queries | SQL of widgets/alerts (**no** execute) |
 | **hive** | Hive LDAP | `SELECT` on scripts table (+ owners) | script texts |
 | **gitscan** | git clone token | **read** clone of source repo | files under `dirs` / `extensions` |
-| **qlik** | QRC PKCS#12 + `X-Qlik-User` (Engine + QRS) | streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
+| **qlik** | QRC PKCS#12 + `X-Qlik-User` (Engine + QRS) | Qlik Sense Enterprise: streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
 | **sink.git** | bot + token | **write** target dbt repo (push branch) | — |
 | **sink.mr** | same or separate token | create MR/PR on `base_branch` | — |
 | **manifest** | HTTP(S) or file | read URL / file | dbt manifest |
 
 Warehouse **execute SQL** is never required.
-
-## Legacy env → YAML (rename notes)
-
-Older deployments used `DBT_EXP_*` (and related) env vars. Mapping highlights:
-
-| Legacy | YAML |
-|--------|------|
-| `DBT_EXP_SOURCE_NAME` | `source[].type` (+ `source[].name` for package dir; was `save_path`) |
-| `DBT_EXP_SAVE_PATH` | `source[].name` |
-| `from_sigma` | `mysql` |
-| `from_git` | `gitscan` |
-| `from_hive` | `hive` |
-| `DBT_EXP_APP_EXCLUDE` / `APP_INCLUDE` | `qlik.stream_exclude` / `stream_include` (streams, not apps) |
-| `DBT_EXP_DEFAULT_OWNER_*` / `GIT_EXPO_OWNERS` | `default_owner.*` (not per-source) |
-| `SIGMA_EXPO_MYSQL_*` / `DBT_EXP_HIVE_*` | shared `SQLCatalog` under `mysql` / `hive` blocks |
-| `GIT_EXPO_*` (except owners) | `gitscan` block |
-| `DBT_EXP_GIT_*` | `sink.git.*` / `sink.mr.*` |
 
 ## Contributors
 
