@@ -3,6 +3,7 @@ package qlik
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"text/template"
@@ -93,23 +94,29 @@ func (s *Source) Collect(ctx context.Context, m *manifest.Finder) ([]exposure.Fi
 	if err != nil {
 		return nil, fmt.Errorf("qlik: list apps: %w", err)
 	}
+	slog.Info("qlik apps listed", "count", len(apps), "datasource", s.cfg.Datasource)
 
 	var exposures []exposure.Exposure
-	for _, app := range apps {
+	skippedStream, skippedEmpty, skippedNoTables := 0, 0, 0
+	for i, app := range apps {
 		if !streamAllowed(app.Stream, s.cfg.StreamInclude, s.cfg.StreamExclude) {
+			skippedStream++
 			continue
 		}
+		slog.Info("qlik load script", "i", i+1, "of", len(apps), "app_id", app.ID, "name", app.Name, "stream", app.Stream)
 		script, err := s.scripts.LoadScript(ctx, app.ID)
 		if err != nil {
 			return nil, fmt.Errorf("qlik: script %s: %w", app.ID, err)
 		}
 		filtered := parse.FilterQlikScript(script, s.cfg.Datasource)
 		if strings.TrimSpace(filtered) == "" {
+			skippedEmpty++
 			continue
 		}
 		tables := parse.Tables(filtered, s.parse)
 		lookup := m.Refs(tables)
 		if len(lookup.Found) == 0 && len(lookup.NotFound) == 0 {
+			skippedNoTables++
 			continue
 		}
 		exp, err := s.buildExposure(ctx, app, lookup, urlTmpl)
@@ -118,6 +125,12 @@ func (s *Source) Collect(ctx context.Context, m *manifest.Finder) ([]exposure.Fi
 		}
 		exposures = append(exposures, exp)
 	}
+	slog.Info("qlik collect done",
+		"exposures", len(exposures),
+		"skipped_stream", skippedStream,
+		"skipped_empty_filter", skippedEmpty,
+		"skipped_no_tables", skippedNoTables,
+	)
 	if len(exposures) == 0 {
 		return nil, nil
 	}
