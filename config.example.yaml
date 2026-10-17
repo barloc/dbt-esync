@@ -1,6 +1,6 @@
-# Full YAML schema (T2). Secrets left empty — override via DBT_ESYNC_* env
-# (e.g. DBT_ESYNC_SINK__GIT__TOKEN, DBT_ESYNC_SOURCE__QLIK__PASSWORD). Env wins over file.
-save_path: bi_qlik_sense
+# Full YAML schema. Secrets left empty — override via DBT_ESYNC_* env
+# (e.g. DBT_ESYNC_SINK__GIT__TOKEN, DBT_ESYNC_SOURCE__0__QLIK__PASSWORD). Env wins over file.
+# source is an array: each entry has name (package dir) + type + typed block.
 default_owner:
   name: analytics
   email: "@analytics"
@@ -16,84 +16,85 @@ parse:
   # schema_allowlist: ["schema_a", "schema_b"]
 
 source:
-  type: qlik
-  qlik:
-    host: qlik.example.com
-    user: "DOMAIN\\user"
-    password: ""
-    datasource: starrocks
-    stream_exclude: ["99-Archive", "92-TMP"]
-    stream_include: []
-    qrc:
-      host: qrc.example.com
-      cert_b64: ""
+  - name: bi_qlik_sense
+    type: qlik
+    qlik:
+      host: qlik.example.com
+      user: "DOMAIN\\user"
       password: ""
-      user_directory: inter
-      user_id: readonly
-    exposure_url_template: "https://qlik.example.com/sense/app/{{.AppID}}"
+      datasource: starrocks
+      stream_exclude: ["99-Archive", "92-TMP"]
+      stream_include: []
+      qrc:
+        host: qrc.example.com
+        cert_b64: ""
+        password: ""
+        user_directory: inter
+        user_id: readonly
+      exposure_url_template: "https://qlik.example.com/sense/app/{{.AppID}}"
 
-# source:
-#   type: growthbook
-#   growthbook:
-#     host: "https://growthbook-api.example.com/api/v1/data-sources"
-#     api_key: ""
-#     filter_source: starrocks
-#     exposure_url: "https://growthbook.example.com/datasources"
+  # - name: bi_growthbook
+  #   type: growthbook
+  #   growthbook:
+  #     host: "https://growthbook-api.example.com/api/v1/data-sources"
+  #     api_key: ""
+  #     filter_source: starrocks
+  #     exposure_url: "https://growthbook.example.com/datasources"
 
-# hive and mysql share the same SQL-catalog schema (driver = source.type only):
-# source:
-#   type: mysql
-#   mysql:
-#     host: mysql.example.com
-#     port: 3306
-#     user: readonly
-#     password: ""
-#     database: sql_catalog
-#     # query: "SELECT id, sql_text AS body FROM worksheets"
-#     table: worksheets
-#     id_column: id
-#     sql_column: sql_text
-#     description_column: description
-#     extra_filters: ""
-#     exposure_prefix: mysql
-#     exposure_url_template: "https://bi.example.com/workbook/{{.ID}}"
+  # hive and mysql share the same SQL-catalog schema (driver = type only):
+  # - name: bi_mysql
+  #   type: mysql
+  #   mysql:
+  #     host: mysql.example.com
+  #     port: 3306
+  #     user: readonly
+  #     password: ""
+  #     database: sql_catalog
+  #     # query: "SELECT id, sql_text AS body FROM worksheets"
+  #     table: worksheets
+  #     id_column: id
+  #     sql_column: sql_text
+  #     description_column: description
+  #     extra_filters: ""
+  #     exposure_prefix: mysql
+  #     exposure_url_template: "https://bi.example.com/workbook/{{.ID}}"
 
-# source:
-#   type: hive
-#   hive:
-#     host: hive.example.com
-#     port: 10000
-#     user: readonly
-#     password: ""
-#     database: scripts
-#     table: hive_scripts
-#     id_column: id
-#     sql_column: script
-#     description_column: description
-#     extra_filters: ""
-#     exposure_prefix: hive
-#     exposure_url_template: "https://hive.example.com/script/{{.ID}}"
+  # - name: bi_hive
+  #   type: hive
+  #   hive:
+  #     host: hive.example.com
+  #     port: 10000
+  #     user: readonly
+  #     password: ""
+  #     database: scripts
+  #     table: hive_scripts
+  #     id_column: id
+  #     sql_column: script
+  #     description_column: description
+  #     extra_filters: ""
+  #     exposure_prefix: hive
+  #     exposure_url_template: "https://hive.example.com/script/{{.ID}}"
 
-# source:
-#   type: redash
-#   redash:
-#     host: "https://redash.example.com"
-#     api_key: ""
-#     datasource_name_contains: starrocks
-#     entity_types: ["dashboard", "alerts"]
-#     host_to_display: "https://redash.example.com"
+  # - name: bi_redash
+  #   type: redash
+  #   redash:
+  #     host: "https://redash.example.com"
+  #     api_key: ""
+  #     datasource_name_contains: starrocks
+  #     entity_types: ["dashboard", "alerts"]
+  #     host_to_display: "https://redash.example.com"
 
-# source:
-#   type: gitscan
-#   gitscan:
-#     repo_url: "https://git.example.com/org/analytics.git"
-#     login: ""
-#     token: ""
-#     local_path: /tmp/source_repo
-#     dirs: ["analytics", "notebooks"]
-#     extensions: [".sql", ".py", ".php"]
-#     path_db_tokens: ["starrocks", "vertica", "bigquery"]
-#     vcs: gitlab
+  # - name: bi_gitscan
+  #   type: gitscan
+  #   gitscan:
+  #     repo_url: "https://git.example.com/org/analytics.git"
+  #     login: ""
+  #     token: ""
+  #     local_path: /tmp/source_repo
+  #     dirs: ["analytics", "notebooks"]
+  #     extensions: [".sql", ".py", ".php"]
+  #     path_db_tokens: ["starrocks", "vertica", "bigquery"]
+  #     vcs: gitlab
 
 sink:
   git:

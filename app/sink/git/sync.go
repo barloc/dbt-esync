@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -22,11 +23,24 @@ const (
 	commitEmail = "dbt-esync@localhost"
 )
 
-// Sync clones cfg.LocalPath, replaces exposures_path/packageName with files,
+// Package is one exposures package written under exposures_path/<Name>.
+type Package struct {
+	Name  string
+	Files []exposure.File
+}
+
+// Sync clones cfg.LocalPath, replaces each package under exposures_path,
 // commits on cfg.Branch from baseBranch, and pushes. pushed is false if there is no diff.
-func Sync(ctx context.Context, cfg config.GitSink, baseBranch, packageName string, files []exposure.File) (pushed bool, err error) {
-	if packageName == "" {
-		return false, fmt.Errorf("sink/git: package name is required")
+func Sync(ctx context.Context, cfg config.GitSink, baseBranch string, packages []Package) (pushed bool, err error) {
+	if len(packages) == 0 {
+		return false, fmt.Errorf("sink/git: at least one package is required")
+	}
+	names := make([]string, 0, len(packages))
+	for i := range packages {
+		if packages[i].Name == "" {
+			return false, fmt.Errorf("sink/git: package name is required")
+		}
+		names = append(names, packages[i].Name)
 	}
 	if baseBranch == "" {
 		return false, fmt.Errorf("sink/git: base branch is required")
@@ -60,10 +74,12 @@ func Sync(ctx context.Context, cfg config.GitSink, baseBranch, packageName strin
 		return false, fmt.Errorf("sink/git: create branch %s: %w", cfg.Branch, err)
 	}
 
-	pkgRel := filepath.ToSlash(filepath.Join(cfg.ExposuresPath, packageName))
-	pkgAbs := filepath.Join(cfg.LocalPath, filepath.FromSlash(pkgRel))
-	if err := replacePackage(w, cfg.LocalPath, pkgRel, pkgAbs, files); err != nil {
-		return false, err
+	for i := range packages {
+		pkgRel := filepath.ToSlash(filepath.Join(cfg.ExposuresPath, packages[i].Name))
+		pkgAbs := filepath.Join(cfg.LocalPath, filepath.FromSlash(pkgRel))
+		if err := replacePackage(w, cfg.LocalPath, pkgRel, pkgAbs, packages[i].Files); err != nil {
+			return false, err
+		}
 	}
 
 	status, err := w.Status()
@@ -74,7 +90,7 @@ func Sync(ctx context.Context, cfg config.GitSink, baseBranch, packageName strin
 		return false, nil
 	}
 
-	msg := fmt.Sprintf("dbt-esync: update %s", packageName)
+	msg := fmt.Sprintf("dbt-esync: update %s", strings.Join(names, ", "))
 	if _, err := w.Commit(msg, &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  commitName,
