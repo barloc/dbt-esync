@@ -217,8 +217,8 @@ Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS, reads lo
 | `stream_exclude` | Blocklist of Qlik streams |
 | `exposure_url_template` | Dashboard URL (`{{.AppID}}`, …) |
 | `qrc.host` | QRS/QRC host (**required** for default client: app list + tags) |
-| `qrc.cert_b64` | Client PKCS#12 cert (base64; also used for Engine mTLS) |
-| `qrc.password` | PKCS#12 password |
+| `qrc.cert_b64` | Client material (base64; whitespace OK): PKCS#12 **or** PEM certificate |
+| `qrc.password` | PKCS#12 passphrase, **or** base64 PEM private key (legacy Python shape) |
 | `qrc.user_directory` | `X-Qlik-User` directory |
 | `qrc.user_id` | `X-Qlik-User` user id |
 
@@ -233,6 +233,7 @@ Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS, reads lo
 | `sink.git.exposures_path` | Parent subtree for packages (required) |
 | `sink.git.branch` | Feature branch to push (required) |
 | `sink.git.base_branch` | Branch Sync starts from / MR target (required) |
+| `sink.git.commit_name` / `commit_email` | Optional commit author (default `dbt-esync` / `dbt-esync@localhost`) |
 | `sink.mr.enabled` | Open MR/PR after a successful push |
 | `sink.mr.provider` | `gitlab` or `bitbucket` (required when enabled) |
 | `sink.mr.host` | VCS API host URL (required when enabled) |
@@ -250,7 +251,7 @@ All sources are **read-only**. Only the sink writes.
 | **redash** | API key | list/read dashboards, alerts, data_sources, queries | SQL of widgets/alerts (**no** execute) |
 | **hive** | Hive LDAP | `SELECT` on scripts table (+ owners) | script texts |
 | **gitscan** | git clone token | **read** clone of source repo | files under `dirs` / `extensions` |
-| **qlik** | QRC PKCS#12 + `X-Qlik-User` (Engine + QRS) | Qlik Sense Enterprise: streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
+| **qlik** | QRC PKCS#12 or PEM cert+key + `X-Qlik-User` (Engine + QRS) | Qlik Sense Enterprise: streams via QRS; **read load script** via Engine; tags via QRS | scripts + tags |
 | **sink.git** | bot + token | **write** target dbt repo (push branch) | — |
 | **sink.mr** | same or separate token | create MR/PR on `base_branch` | — |
 | **manifest** | HTTP(S) or file | read URL / file | dbt manifest |

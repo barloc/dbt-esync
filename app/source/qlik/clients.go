@@ -29,7 +29,7 @@ func newDefaultClients(cfg config.QlikConfig, httpClient *http.Client) (*default
 	if cfg.QRC.Host == "" || cfg.QRC.CertB64 == "" {
 		return nil, fmt.Errorf("qlik: default client requires qrc.host and qrc.cert_b64 (or inject Catalog/Scripts)")
 	}
-	tlsCfg, err := tlsFromPKCS12(cfg.QRC.CertB64, cfg.QRC.Password)
+	tlsCfg, err := tlsFromClientMaterial(cfg.QRC.CertB64, cfg.QRC.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -76,20 +76,38 @@ func splitSenseUser(user string) (directory, id string) {
 	return "", user
 }
 
-func tlsFromPKCS12(certB64, password string) (*tls.Config, error) {
+func tlsFromClientMaterial(certB64, password string) (*tls.Config, error) {
+	certB64 = stripBase64(certB64)
+	password = stripBase64(password)
+
 	raw, err := base64.StdEncoding.DecodeString(certB64)
 	if err != nil {
 		return nil, fmt.Errorf("qlik: cert_b64: %w", err)
 	}
-	key, cert, err := pkcs12.Decode(raw, password)
-	if err != nil {
-		return nil, fmt.Errorf("qlik: pkcs12: %w", err)
+
+	var tlsCert tls.Certificate
+	if isPEM(raw) {
+		// Legacy Python shape: cert_b64 = PEM cert, password = base64 PEM private key.
+		keyPEM, err := base64.StdEncoding.DecodeString(password)
+		if err != nil {
+			return nil, fmt.Errorf("qlik: qrc.password (PEM key): %w", err)
+		}
+		tlsCert, err = tls.X509KeyPair(raw, keyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("qlik: PEM cert+key: %w", err)
+		}
+	} else {
+		key, cert, err := pkcs12.Decode(raw, password)
+		if err != nil {
+			return nil, fmt.Errorf("qlik: pkcs12: %w", err)
+		}
+		tlsCert = tls.Certificate{
+			Certificate: [][]byte{cert.Raw},
+			PrivateKey:  key,
+			Leaf:        cert,
+		}
 	}
-	tlsCert := tls.Certificate{
-		Certificate: [][]byte{cert.Raw},
-		PrivateKey:  key,
-		Leaf:        cert,
-	}
+
 	return &tls.Config{
 		Certificates: []tls.Certificate{tlsCert},
 		MinVersion:   tls.VersionTLS12,
@@ -97,6 +115,25 @@ func tlsFromPKCS12(certB64, password string) (*tls.Config, error) {
 		// Upgrade: pin CA via optional qrc.ca_b64 when available.
 		InsecureSkipVerify: true, //nolint:gosec // Sense client-cert labs rarely ship a public CA
 	}, nil
+}
+
+func stripBase64(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case ' ', '\t', '\n', '\r':
+			continue
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+func isPEM(raw []byte) bool {
+	return strings.Contains(string(raw), "-----BEGIN ")
 }
 
 type qrsApp struct {

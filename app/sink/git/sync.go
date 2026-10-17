@@ -90,11 +90,19 @@ func Sync(ctx context.Context, cfg config.GitSink, baseBranch string, packages [
 		return false, nil
 	}
 
+	authorName := commitName
+	authorEmail := commitEmail
+	if cfg.CommitName != "" {
+		authorName = cfg.CommitName
+	}
+	if cfg.CommitEmail != "" {
+		authorEmail = cfg.CommitEmail
+	}
 	msg := fmt.Sprintf("dbt-esync: update %s", strings.Join(names, ", "))
 	if _, err := w.Commit(msg, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  commitName,
-			Email: commitEmail,
+			Name:  authorName,
+			Email: authorEmail,
 			When:  time.Now(),
 		},
 	}); err != nil {
