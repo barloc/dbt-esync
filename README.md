@@ -8,7 +8,7 @@ Go CLI / CronJob with YAML `--config`. One config = N named sources + one sink.
 
 ## Status
 
-Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. Source stubs still return `not implemented`; source implementations follow in S1–S6.
+Config contract (T2) is in place. **Parse (T3):** `app/parse`. **Manifest / exposure (T4):** `app/manifest` + `app/exposure`. **Sink (T5):** `app/sink/git` clones/pushes the exposures package; `app/sink/vcs` opens a GitLab MR or Bitbucket PR when `sink.mr.enabled`. **GrowthBook (S1):** `app/source/growthbook`. Remaining source stubs return `not implemented` (S2–S6).
 
 ## Build & run
 
@@ -19,7 +19,7 @@ make run                          # uses config.example.yaml
 go run . --config config.example.yaml
 ```
 
-Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort); stubs return `not implemented`. Successful packages are synced in one commit; any Collect error makes the process exit non-zero. Parse, manifest, exposure, and sink are covered by unit tests (`make test`).
+Expected today: process loads and validates the full config, loads the manifest, then Collects each `source[]` entry (best-effort). GrowthBook Collects via REST; other source types still return `not implemented`. Successful non-empty packages are synced in one commit; any Collect error makes the process exit non-zero. Unit tests: `make test`.
 
 ```bash
 make test
@@ -98,7 +98,7 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 
 | `type` | Package | Status |
 |--------|---------|--------|
-| `growthbook` | `app/source/growthbook` | stub |
+| `growthbook` | `app/source/growthbook` | implemented |
 | `mysql` | `app/source/mysql` | stub |
 | `redash` | `app/source/redash` | stub |
 | `hive` | `app/source/hive` | stub |

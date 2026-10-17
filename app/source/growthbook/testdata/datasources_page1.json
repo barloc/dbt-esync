@@ -1,0 +1,15 @@
+{
+  "count": 2,
+  "dataSources": [
+    {
+      "id": "ds2",
+      "type": "starrocks",
+      "assignmentQueries": [
+        {
+          "id": "q2",
+          "sql": "SELECT * FROM schema_a.events_raw"
+        }
+      ]
+    }
+  ]
+}

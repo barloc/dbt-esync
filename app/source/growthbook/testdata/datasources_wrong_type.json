@@ -1,0 +1,16 @@
+{
+  "count": 1,
+  "dataSources": [
+    {
+      "id": "ds_bq",
+      "type": "bigquery",
+      "assignmentQueries": [
+        {
+          "id": "q_bq",
+          "name": "ignored",
+          "sql": "SELECT * FROM marts.orders_day"
+        }
+      ]
+    }
+  ]
+}

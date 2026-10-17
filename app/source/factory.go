@@ -3,6 +3,7 @@ package source
 import (
 	"fmt"
 
+	"github.com/barloc/dbt-esync/app/config"
 	"github.com/barloc/dbt-esync/app/source/gitscan"
 	"github.com/barloc/dbt-esync/app/source/growthbook"
 	"github.com/barloc/dbt-esync/app/source/hive"
@@ -11,21 +12,21 @@ import (
 	"github.com/barloc/dbt-esync/app/source/redash"
 )
 
-// KnownTypes lists supported source[].type values.
-var KnownTypes = []string{
-	"growthbook",
-	"mysql",
-	"redash",
-	"hive",
-	"gitscan",
-	"qlik",
-}
+// KnownTypes lists supported source[].type values (alias of config.KnownSourceTypes).
+var KnownTypes = config.KnownSourceTypes
 
-// New returns a Source implementation for the given type (stubs in T1).
-func New(typ string) (Source, error) {
-	switch typ {
+// New returns a Source for the given config entry.
+func New(e config.SourceEntry, deps Deps) (Source, error) {
+	switch e.Type {
 	case "growthbook":
-		return growthbook.New(), nil
+		if e.GrowthBook == nil {
+			return nil, fmt.Errorf("growthbook config is required")
+		}
+		return growthbook.New(*e.GrowthBook, growthbook.Options{
+			Owner:      deps.Owner,
+			Parse:      deps.Parse,
+			HTTPClient: deps.HTTPClient,
+		}), nil
 	case "mysql":
 		return mysql.New(), nil
 	case "redash":
@@ -37,6 +38,6 @@ func New(typ string) (Source, error) {
 	case "qlik":
 		return qlik.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown source.type %q", typ)
+		return nil, fmt.Errorf("unknown source.type %q", e.Type)
 	}
 }

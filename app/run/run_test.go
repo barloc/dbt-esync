@@ -16,12 +16,14 @@ func TestUnitCollectAllBestEffort(t *testing.T) {
 	orig := newSource
 	t.Cleanup(func() { newSource = orig })
 
-	newSource = func(typ string) (source.Source, error) {
-		switch typ {
+	newSource = func(e config.SourceEntry, _ source.Deps) (source.Source, error) {
+		switch e.Type {
 		case "ok":
 			return stubSource{files: []exposure.File{{Name: "a"}}}, nil
 		case "fail":
 			return stubSource{err: errors.New("boom")}, nil
+		case "empty":
+			return stubSource{}, nil
 		default:
 			return nil, errors.New("unknown")
 		}
@@ -30,8 +32,9 @@ func TestUnitCollectAllBestEffort(t *testing.T) {
 	entries := []config.SourceEntry{
 		{Name: "pkg_ok", Type: "ok"},
 		{Name: "pkg_fail", Type: "fail"},
+		{Name: "pkg_empty", Type: "empty"},
 	}
-	pkgs, errs := collectAll(context.Background(), &manifest.Finder{}, entries)
+	pkgs, errs := collectAll(context.Background(), &manifest.Finder{}, entries, source.Deps{})
 	if len(pkgs) != 1 || pkgs[0].Name != "pkg_ok" {
 		t.Fatalf("packages: %+v", pkgs)
 	}

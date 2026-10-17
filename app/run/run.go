@@ -8,6 +8,7 @@ import (
 
 	"github.com/barloc/dbt-esync/app/config"
 	"github.com/barloc/dbt-esync/app/manifest"
+	"github.com/barloc/dbt-esync/app/parse"
 	sinkgit "github.com/barloc/dbt-esync/app/sink/git"
 	"github.com/barloc/dbt-esync/app/sink/vcs"
 	"github.com/barloc/dbt-esync/app/source"
@@ -32,7 +33,14 @@ func Run(configPath string) error {
 		return err
 	}
 
-	packages, collectErrs := collectAll(ctx, finder, cfg.Source)
+	deps := source.Deps{
+		Owner: cfg.DefaultOwner,
+		Parse: parse.Options{
+			ExcludedCatalogs: cfg.Parse.ExcludedCatalogs,
+			SchemaAllowlist:  cfg.Parse.SchemaAllowlist,
+		},
+	}
+	packages, collectErrs := collectAll(ctx, finder, cfg.Source, deps)
 
 	if len(packages) > 0 {
 		pushed, err := sinkgit.Sync(ctx, cfg.Sink.Git, cfg.Sink.Git.BaseBranch, packages)
@@ -67,12 +75,12 @@ func withCollectErrs(collectErrs []error, err error) error {
 // newSource builds a collector; overridden in tests.
 var newSource = source.New
 
-func collectAll(ctx context.Context, finder *manifest.Finder, entries []config.SourceEntry) ([]sinkgit.Package, []error) {
+func collectAll(ctx context.Context, finder *manifest.Finder, entries []config.SourceEntry, deps source.Deps) ([]sinkgit.Package, []error) {
 	var packages []sinkgit.Package
 	var errs []error
 	for i := range entries {
 		e := &entries[i]
-		src, err := newSource(e.Type)
+		src, err := newSource(*e, deps)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
 			continue
@@ -80,6 +88,9 @@ func collectAll(ctx context.Context, finder *manifest.Finder, entries []config.S
 		files, err := src.Collect(ctx, finder)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("source %q (%s): %w", e.Name, e.Type, err))
+			continue
+		}
+		if len(files) == 0 {
 			continue
 		}
 		packages = append(packages, sinkgit.Package{Name: e.Name, Files: files})

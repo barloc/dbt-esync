@@ -1,0 +1,16 @@
+{
+  "count": 1,
+  "dataSources": [
+    {
+      "id": "ds1",
+      "type": "starrocks",
+      "assignmentQueries": [
+        {
+          "id": "q1",
+          "name": "miss",
+          "sql": "SELECT * FROM schema_a.missing_table"
+        }
+      ]
+    }
+  ]
+}
