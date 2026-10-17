@@ -309,6 +309,66 @@ func TestUnitValidateMRWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestUnitValidateSQLCatalogFields(t *testing.T) {
+	t.Parallel()
+
+	full := func() *config.SQLCatalog {
+		return &config.SQLCatalog{
+			Host:                "db.example.com",
+			User:                "readonly",
+			Database:            "scripts",
+			Table:               "catalog",
+			IDColumn:            "id",
+			SQLColumn:           "body",
+			ExposurePrefix:      "cat",
+			ExposureURLTemplate: "https://example.com/item/{{.ID}}",
+		}
+	}
+	base := func(cat *config.SQLCatalog) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "mysql", MySQL: cat}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	if err := base(full()).Validate(); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "mysql is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+
+	cases := []struct {
+		mut  func(*config.SQLCatalog)
+		want string
+	}{
+		{func(c *config.SQLCatalog) { c.Host = "" }, "host is required"},
+		{func(c *config.SQLCatalog) { c.User = "" }, "user is required"},
+		{func(c *config.SQLCatalog) { c.Database = "" }, "database is required"},
+		{func(c *config.SQLCatalog) { c.IDColumn = "" }, "id_column is required"},
+		{func(c *config.SQLCatalog) { c.SQLColumn = "" }, "sql_column is required"},
+		{func(c *config.SQLCatalog) { c.ExposurePrefix = "" }, "exposure_prefix is required"},
+		{func(c *config.SQLCatalog) { c.ExposureURLTemplate = "" }, "exposure_url_template is required"},
+		{func(c *config.SQLCatalog) { c.Table = ""; c.Query = "" }, "query or"},
+		{func(c *config.SQLCatalog) { c.Query = "SELECT 1" }, "mutually exclusive"},
+	}
+	for _, tc := range cases {
+		cat := full()
+		tc.mut(cat)
+		err := base(cat).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+
+	qOnly := full()
+	qOnly.Table = ""
+	qOnly.Query = "SELECT id, body FROM catalog"
+	if err := base(qOnly).Validate(); err != nil {
+		t.Fatalf("query only: %v", err)
+	}
+}
+
 func TestUnitSQLCatalogSharedSchema(t *testing.T) {
 	body := `
 manifest:

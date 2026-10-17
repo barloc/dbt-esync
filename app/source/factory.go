@@ -28,7 +28,13 @@ func New(e config.SourceEntry, deps Deps) (Source, error) {
 			HTTPClient: deps.HTTPClient,
 		}), nil
 	case "mysql":
-		return mysql.New(), nil
+		if e.MySQL == nil {
+			return nil, fmt.Errorf("mysql config is required")
+		}
+		return mysql.New(*e.MySQL, mysql.Options{
+			Owner: deps.Owner,
+			Parse: deps.Parse,
+		}), nil
 	case "redash":
 		return redash.New(), nil
 	case "hive":
