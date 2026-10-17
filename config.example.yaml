@@ -19,14 +19,15 @@ source:
   - name: bi_qlik_sense
     type: qlik
     qlik:
-      host: qlik.example.com
+      # WSS proxy for load scripts (ticket + cookie), not QRS :4242 / Engine :4747
+      host: "wss://qlik.example.com/app/"
       user: "DOMAIN\\user"
       password: ""
       datasource: starrocks
       stream_exclude: ["99-Archive", "92-TMP"]
       stream_include: []
       qrc:
-        host: qrc.example.com
+        host: "https://qlik.example.com:4242"
         cert_b64: ""
         password: ""
         user_directory: inter

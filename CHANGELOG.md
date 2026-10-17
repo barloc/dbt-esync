@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6] — 2026-10-18
+
+### Fixed
+
+- Qlik `LoadScript` uses proxy ticket + WSS session cookie on `qlik.host` (Python `QlikConnect`), not Engine mTLS `:4747`
+- `qlik.host` / `user` / `password` = WSS forms login; `qrc.host` stays QRS `:4242` + client cert for list/tags
+
 ## [1.0.5] — 2026-10-18
 
 ### Fixed
