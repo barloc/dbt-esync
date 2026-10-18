@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.7] — 2026-10-18
+
+### Added
+
+- Source `superset`: Apache Superset dashboards via REST (`api_key` or login JWT; filter by `database_name_contains`)
+
 ## [1.0.6] — 2026-10-18
 
 ### Fixed

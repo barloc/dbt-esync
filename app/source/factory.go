@@ -10,6 +10,7 @@ import (
 	"github.com/barloc/dbt-esync/app/source/mysql"
 	"github.com/barloc/dbt-esync/app/source/qlik"
 	"github.com/barloc/dbt-esync/app/source/redash"
+	"github.com/barloc/dbt-esync/app/source/superset"
 )
 
 // KnownTypes lists supported source[].type values (alias of config.KnownSourceTypes).
@@ -67,6 +68,16 @@ func New(e config.SourceEntry, deps Deps) (Source, error) {
 			return nil, fmt.Errorf("qlik config is required")
 		}
 		return qlik.New(*e.Qlik, qlik.Options{
+			PackageName: e.Name,
+			Owner:       deps.Owner,
+			Parse:       deps.Parse,
+			HTTPClient:  deps.HTTPClient,
+		}), nil
+	case "superset":
+		if e.Superset == nil {
+			return nil, fmt.Errorf("superset config is required")
+		}
+		return superset.New(*e.Superset, superset.Options{
 			PackageName: e.Name,
 			Owner:       deps.Owner,
 			Parse:       deps.Parse,

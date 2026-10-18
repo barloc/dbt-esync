@@ -15,7 +15,7 @@ func TestUnitNewStubsNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	for _, typ := range source.KnownTypes {
-		if typ == "growthbook" || typ == "mysql" || typ == "redash" || typ == "hive" || typ == "gitscan" || typ == "qlik" {
+		if typ == "growthbook" || typ == "mysql" || typ == "redash" || typ == "hive" || typ == "gitscan" || typ == "qlik" || typ == "superset" {
 			continue
 		}
 		t.Run(typ, func(t *testing.T) {
@@ -83,6 +83,15 @@ func TestUnitNewQlikRequiresConfig(t *testing.T) {
 
 	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "qlik"}, source.Deps{})
 	if err == nil || !strings.Contains(err.Error(), "qlik config") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUnitNewSupersetRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := source.New(config.SourceEntry{Name: "pkg", Type: "superset"}, source.Deps{})
+	if err == nil || !strings.Contains(err.Error(), "superset config") {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -50,6 +50,7 @@ type SourceEntry struct {
 	Hive       *SQLCatalog       `yaml:"hive,omitempty"`
 	MySQL      *SQLCatalog       `yaml:"mysql,omitempty"`
 	GrowthBook *GrowthBookConfig `yaml:"growthbook,omitempty"`
+	Superset   *SupersetConfig   `yaml:"superset,omitempty"`
 }
 
 // QlikConfig is source[].type: qlik.
@@ -119,6 +120,18 @@ type GrowthBookConfig struct {
 	APIKey       string `yaml:"api_key"`
 	FilterSource string `yaml:"filter_source"`
 	ExposureURL  string `yaml:"exposure_url"`
+}
+
+// SupersetConfig is source[].type: superset.
+// Auth: exactly one of APIKey or (Username + Password → JWT login).
+type SupersetConfig struct {
+	Host                 string `yaml:"host"`
+	APIKey               string `yaml:"api_key"`
+	Username             string `yaml:"username"`
+	Password             string `yaml:"password"`
+	DatabaseNameContains string `yaml:"database_name_contains"`
+	HostToDisplay        string `yaml:"host_to_display"`
+	UseAPIOwner          bool   `yaml:"use_api_owner"` // false → default_owner; true → first owner
 }
 
 // Sink writes exposures to a target dbt repo (and optional MR/PR).
@@ -227,6 +240,8 @@ func validateSourceEntry(i int, e *SourceEntry, seen map[string]struct{}) error 
 		return requireSQLCatalog(prefix+".mysql", e.MySQL)
 	case "growthbook":
 		return validateGrowthBook(prefix+".growthbook", e.GrowthBook)
+	case "superset":
+		return validateSuperset(prefix+".superset", e.Superset)
 	}
 	return nil
 }
@@ -308,6 +323,31 @@ func validateRedash(block string, r *RedashConfig) error {
 			return fmt.Errorf("config: %s.entity_types: duplicate %q", block, et)
 		}
 		seen[et] = struct{}{}
+	}
+	return nil
+}
+
+func validateSuperset(block string, s *SupersetConfig) error {
+	if s == nil {
+		return fmt.Errorf("config: %s is required when source.type matches", block)
+	}
+	if s.Host == "" {
+		return fmt.Errorf("config: %s.host is required", block)
+	}
+	if s.DatabaseNameContains == "" {
+		return fmt.Errorf("config: %s.database_name_contains is required", block)
+	}
+	hasKey := s.APIKey != ""
+	hasUser := s.Username != ""
+	hasPass := s.Password != ""
+	hasLogin := hasUser && hasPass
+	switch {
+	case hasUser != hasPass:
+		return fmt.Errorf("config: %s.username and %s.password must both be set for login auth", block, block)
+	case hasKey && hasLogin:
+		return fmt.Errorf("config: %s: set either api_key or username/password, not both", block)
+	case !hasKey && !hasLogin:
+		return fmt.Errorf("config: %s: api_key or username/password is required", block)
 	}
 	return nil
 }
@@ -398,6 +438,7 @@ var KnownSourceTypes = []string{
 	"hive",
 	"gitscan",
 	"qlik",
+	"superset",
 }
 
 func knownSourceType(typ string) bool {

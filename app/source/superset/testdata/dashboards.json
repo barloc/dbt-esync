@@ -1,0 +1,17 @@
+{
+  "count": 2,
+  "result": [
+    {
+      "id": 10,
+      "dashboard_title": "Orders Dash",
+      "owners": [
+        {"first_name": "Alice", "last_name": "Admin", "email": "alice@example.com"}
+      ]
+    },
+    {
+      "id": 11,
+      "dashboard_title": "Other DB Dash",
+      "owners": []
+    }
+  ]
+}

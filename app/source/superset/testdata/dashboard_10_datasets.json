@@ -1,0 +1,28 @@
+{
+  "result": [
+    {
+      "id": 53,
+      "name": "orders_virt",
+      "table_name": "orders_virt",
+      "schema": "",
+      "sql": "SELECT * FROM marts.orders_day",
+      "database": {"id": 1, "name": "starrocks_prod"}
+    },
+    {
+      "id": 54,
+      "name": "orders_phys",
+      "table_name": "orders_day",
+      "schema": "marts",
+      "sql": "",
+      "database": {"id": 1, "name": "starrocks_prod"}
+    },
+    {
+      "id": 99,
+      "name": "pg_only",
+      "table_name": "ignored",
+      "schema": "public",
+      "sql": "SELECT * FROM public.ignored",
+      "database": {"id": 2, "name": "postgres_other"}
+    }
+  ]
+}

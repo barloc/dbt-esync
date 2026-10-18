@@ -1,0 +1,12 @@
+{
+  "result": [
+    {
+      "id": 70,
+      "name": "pg_chart",
+      "table_name": "ignored",
+      "schema": "public",
+      "sql": "SELECT * FROM public.ignored",
+      "database": {"id": 2, "name": "postgres_other"}
+    }
+  ]
+}
