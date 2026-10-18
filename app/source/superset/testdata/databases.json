@@ -1,0 +1,7 @@
+{
+  "count": 2,
+  "result": [
+    {"id": 1, "database_name": "starrocks_prod"},
+    {"id": 2, "database_name": "postgres_other"}
+  ]
+}

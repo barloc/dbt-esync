@@ -123,6 +123,7 @@ Collect runs every entry (best-effort). Successful packages are written in one s
 | `hive` | `app/source/hive` | SQL catalog in Hive (`SELECT` script texts + owners) |
 | `gitscan` | `app/source/gitscan` | Read-only clone of a repo; scan files under `dirs` / `extensions` |
 | `qlik` | `app/source/qlik` | Qlik Sense Enterprise apps: QRS list + WSS proxy load scripts |
+| `superset` | `app/source/superset` | Apache Superset dashboards via REST (datasets → SQL) |
 
 #### GrowthBook (`growthbook` block)
 
@@ -203,6 +204,21 @@ Clones a source repo read-only and scans files under configured directories and 
 | `path_db_tokens` | Path tokens matched with `manifest.filter_name` |
 | `vcs` | `gitlab` \| `bitbucket` (browse URL shape) |
 
+#### Superset (`superset` block)
+
+Lists dashboards, then reads dataset SQL for matching databases. Does not execute queries. Physical datasets (empty SQL) become `SELECT 1 FROM schema.table` for table extraction.
+
+**Compatibility:** REST Collect targets Apache Superset **4.1+** (`/api/v1/database/`, `/dashboard/`, `/dashboard/{id}/datasets`, login JWT). Prefer **`api_key`** on **6.1+** with `FAB_API_KEY_ENABLED` (FAB ≥ 5.2); on 4.x use `username`/`password` with a `provider: db` service account.
+
+| Option | Filter / meaning |
+|--------|------------------|
+| `host` | Superset API host |
+| `api_key` | Bearer token (FAB `sst_…` API key or JWT); XOR with username/password; needs Superset **6.1+** |
+| `username` / `password` | Login via `POST /api/v1/security/login` (`provider: db`); XOR with `api_key` |
+| `database_name_contains` | Substring match on database name (required) |
+| `host_to_display` | URL written into exposures (empty → `host`) |
+| `use_api_owner` | `true` → first dashboard owner; `false` (default) → `default_owner`; empty API fields fall back per-field |
+
 #### Qlik Sense (`qlik` block)
 
 Targets **Qlik Sense Enterprise** (not Qlik Cloud). Lists apps via QRS (client cert), reads load scripts via the proxy ticket + WSS path (same as Python `QlikConnect`), optionally resolves tags/maturity via QRS.
@@ -252,6 +268,7 @@ All sources are **read-only**. Only the sink writes.
 | **hive** | Hive LDAP | `SELECT` on scripts table (+ owners) | script texts |
 | **gitscan** | git clone token | **read** clone of source repo | files under `dirs` / `extensions` |
 | **qlik** | WSS forms user/password + QRC PKCS#12/PEM cert + `X-Qlik-User` | Qlik Sense Enterprise: streams via QRS; **read load script** via proxy ticket/WSS; tags via QRS | scripts + tags |
+| **superset** | API key Bearer **or** username/password → JWT | list/read dashboards, databases, dashboard datasets | dataset SQL (**no** execute) |
 | **sink.git** | bot + token | **write** target dbt repo (push branch) | — |
 | **sink.mr** | same or separate token | create MR/PR on `base_branch` | — |
 | **manifest** | HTTP(S) or file | read URL / file | dbt manifest |

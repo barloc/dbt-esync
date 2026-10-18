@@ -265,6 +265,58 @@ func TestUnitValidateRedashFields(t *testing.T) {
 	}
 }
 
+func TestUnitValidateSupersetFields(t *testing.T) {
+	t.Parallel()
+
+	base := func(s *config.SupersetConfig) *config.Config {
+		return &config.Config{
+			Manifest: config.Manifest{File: "m.json"},
+			Source:   []config.SourceEntry{{Name: "pkg", Type: "superset", Superset: s}},
+			Sink:     config.Sink{Git: validGitSink()},
+		}
+	}
+	fullKey := &config.SupersetConfig{
+		Host:                 "https://superset.example.com",
+		APIKey:               "sst_test",
+		DatabaseNameContains: "starrocks",
+		HostToDisplay:        "https://superset.example.com",
+	}
+	if err := base(fullKey).Validate(); err != nil {
+		t.Fatalf("api_key: %v", err)
+	}
+	fullLogin := &config.SupersetConfig{
+		Host:                 "https://superset.example.com",
+		Username:             "bot",
+		Password:             "secret",
+		DatabaseNameContains: "starrocks",
+	}
+	if err := base(fullLogin).Validate(); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if err := base(nil).Validate(); err == nil || !strings.Contains(err.Error(), "superset is required") {
+		t.Fatalf("nil: got %v", err)
+	}
+	cases := []struct {
+		mut  func(*config.SupersetConfig)
+		want string
+	}{
+		{func(s *config.SupersetConfig) { s.Host = "" }, "host is required"},
+		{func(s *config.SupersetConfig) { s.DatabaseNameContains = "" }, "database_name_contains is required"},
+		{func(s *config.SupersetConfig) { s.APIKey = ""; s.Username = ""; s.Password = "" }, "api_key or username/password is required"},
+		{func(s *config.SupersetConfig) { s.Username = "bot"; s.Password = "x" }, "either api_key or username/password, not both"},
+		{func(s *config.SupersetConfig) { s.APIKey = ""; s.Username = "bot"; s.Password = "" }, "username and"},
+		{func(s *config.SupersetConfig) { s.APIKey = ""; s.Username = ""; s.Password = "x" }, "username and"},
+	}
+	for _, tc := range cases {
+		s := *fullKey
+		tc.mut(&s)
+		err := base(&s).Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: got %v", tc.want, err)
+		}
+	}
+}
+
 func TestUnitValidateRequiresSinkGit(t *testing.T) {
 	t.Parallel()
 
